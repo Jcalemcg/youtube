@@ -29,9 +29,13 @@ logger = logging.getLogger(__name__)
 
 # YouTube Theme Colors
 YOUTUBE_RED = "#FF0000"
-YOUTUBE_DARK = "#282828"
+YOUTUBE_DARK = "#1a1a1a"
+YOUTUBE_DARKER = "#0f0f0f"
 YOUTUBE_LIGHT_GRAY = "#F9F9F9"
 YOUTUBE_GRAY = "#909090"
+ACCENT_BLUE = "#4B8FE0"
+ACCENT_GREEN = "#0F9D58"
+ACCENT_ORANGE = "#F08C21"
 
 # Page config
 st.set_page_config(
@@ -44,63 +48,367 @@ st.set_page_config(
 # Custom CSS for YouTube theme
 st.markdown(f"""
 <style>
+    * {{
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }}
+
     /* Main theme */
     .stApp {{
-        background-color: {YOUTUBE_DARK};
+        background: linear-gradient(135deg, {YOUTUBE_DARKER} 0%, {YOUTUBE_DARK} 100%);
+        color: #e0e0e0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }}
 
-    /* Headers */
-    h1, h2, h3 {{
+    /* Headers - Better typography */
+    h1 {{
         color: white !important;
+        font-size: 2.5rem !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.5px !important;
+        margin-bottom: 1rem !important;
+        margin-top: 1.5rem !important;
     }}
 
-    /* YouTube Red accents */
-    .stButton>button {{
+    h2 {{
+        color: white !important;
+        font-size: 1.8rem !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.25px !important;
+        margin-bottom: 0.75rem !important;
+        margin-top: 1.25rem !important;
+    }}
+
+    h3 {{
+        color: #e0e0e0 !important;
+        font-size: 1.3rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.5rem !important;
+        margin-top: 1rem !important;
+    }}
+
+    h4, h5, h6 {{
+        color: #b0b0b0 !important;
+        font-weight: 600 !important;
+    }}
+
+    /* Text */
+    p {{
+        color: #c8c8c8;
+        line-height: 1.6;
+    }}
+
+    /* Links */
+    a {{
+        color: {ACCENT_BLUE} !important;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }}
+
+    a:hover {{
+        color: #6fa3e8 !important;
+        text-decoration: underline;
+    }}
+
+    /* Buttons - Enhanced styling */
+    .stButton > button {{
         background-color: {YOUTUBE_RED};
         color: white;
         border: none;
-        border-radius: 2px;
-        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 12px rgba(255, 0, 0, 0.25);
+        cursor: pointer;
+        letter-spacing: 0.5px;
+    }}
+
+    .stButton > button:hover {{
+        background-color: #e60000;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(255, 0, 0, 0.35);
+    }}
+
+    .stButton > button:active {{
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(255, 0, 0, 0.25);
+    }}
+
+    /* Primary button variant */
+    .stButton > button[data-testid="baseButton-primary"] {{
+        background: linear-gradient(135deg, {YOUTUBE_RED} 0%, #e60000 100%);
+    }}
+
+    /* Input fields - Enhanced styling */
+    .stTextInput > div > div > input {{
+        background-color: #1e1e1e;
+        color: white;
+        border: 2px solid #303030;
+        border-radius: 6px;
+        padding: 0.7rem 0.9rem !important;
+        font-size: 0.95rem;
+        transition: all 0.3s ease;
+        line-height: 1.5;
+    }}
+
+    .stTextInput > div > div > input:focus {{
+        border-color: {ACCENT_BLUE};
+        box-shadow: 0 0 0 3px rgba(75, 143, 224, 0.1);
+        background-color: #252525;
+    }}
+
+    .stTextInput > div > div > input::placeholder {{
+        color: #666666;
+    }}
+
+    /* Text areas - Enhanced styling */
+    .stTextArea > div > div > textarea {{
+        background-color: #1e1e1e;
+        color: white;
+        border: 2px solid #303030;
+        border-radius: 6px;
+        padding: 0.9rem !important;
+        font-size: 0.95rem;
+        transition: all 0.3s ease;
+        line-height: 1.6;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    }}
+
+    .stTextArea > div > div > textarea:focus {{
+        border-color: {ACCENT_BLUE};
+        box-shadow: 0 0 0 3px rgba(75, 143, 224, 0.1);
+        background-color: #252525;
+    }}
+
+    .stTextArea > div > div > textarea::placeholder {{
+        color: #666666;
+    }}
+
+    /* Select inputs */
+    .stSelectbox > div > div > select {{
+        background-color: #1e1e1e;
+        color: white;
+        border: 2px solid #303030;
+        border-radius: 6px;
+        padding: 0.7rem 0.9rem;
+        transition: all 0.3s ease;
+    }}
+
+    .stSelectbox > div > div > select:focus {{
+        border-color: {ACCENT_BLUE};
+        outline: none;
+    }}
+
+    /* Checkboxes and Radio buttons */
+    .stCheckbox {{
+        color: #c8c8c8;
+    }}
+
+    .stCheckbox > label > span {{
         font-weight: 500;
     }}
 
-    .stButton>button:hover {{
-        background-color: #CC0000;
+    .stRadio {{
+        color: #c8c8c8;
     }}
 
-    /* Input fields */
-    .stTextInput>div>div>input {{
-        background-color: #121212;
-        color: white;
-        border: 1px solid #303030;
-    }}
-
-    /* Text areas */
-    .stTextArea>div>div>textarea {{
-        background-color: #121212;
-        color: white;
-        border: 1px solid #303030;
-    }}
-
-    /* Success/Info boxes */
+    /* Success/Info/Warning/Error boxes - Enhanced cards */
     .stSuccess {{
-        background-color: #0F9D58;
-        color: white;
+        background-color: rgba(15, 157, 88, 0.15);
+        border: 2px solid {ACCENT_GREEN};
+        border-radius: 8px;
+        padding: 1rem !important;
+        color: #e0e0e0 !important;
     }}
 
-    /* Progress bar */
+    .stInfo {{
+        background-color: rgba(75, 143, 224, 0.15);
+        border: 2px solid {ACCENT_BLUE};
+        border-radius: 8px;
+        padding: 1rem !important;
+        color: #e0e0e0 !important;
+    }}
+
+    .stWarning {{
+        background-color: rgba(240, 140, 33, 0.15);
+        border: 2px solid {ACCENT_ORANGE};
+        border-radius: 8px;
+        padding: 1rem !important;
+        color: #e0e0e0 !important;
+    }}
+
+    .stError {{
+        background-color: rgba(255, 0, 0, 0.15);
+        border: 2px solid {YOUTUBE_RED};
+        border-radius: 8px;
+        padding: 1rem !important;
+        color: #ff6b6b !important;
+    }}
+
+    /* Progress bar - Enhanced */
     .stProgress > div > div > div > div {{
-        background-color: {YOUTUBE_RED};
+        background: linear-gradient(90deg, {YOUTUBE_RED} 0%, #ff3333 100%);
+        border-radius: 4px;
     }}
 
-    /* Sidebar */
+    .stProgress {{
+        height: 6px;
+    }}
+
+    /* Sidebar - Enhanced */
     section[data-testid="stSidebar"] {{
-        background-color: #212121;
+        background: linear-gradient(135deg, #1a1a1a 0%, #1e1e1e 100%);
+        border-right: 1px solid #303030;
     }}
 
-    /* Cards */
-    .element-container {{
+    section[data-testid="stSidebar"] > div > div:first-child {{
+        padding-top: 2rem;
+    }}
+
+    /* Sidebar text */
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {{
+        color: white !important;
+    }}
+
+    /* Sidebar links */
+    section[data-testid="stSidebar"] a {{
+        color: {ACCENT_BLUE};
+    }}
+
+    /* Expanders - Better styling */
+    .streamlit-expanderHeader {{
+        background-color: #252525;
+        border: 1px solid #303030;
+        border-radius: 6px;
+        padding: 0.75rem !important;
+        transition: all 0.2s ease;
+    }}
+
+    .streamlit-expanderHeader:hover {{
+        background-color: #2d2d2d;
+        border-color: {ACCENT_BLUE};
+    }}
+
+    .streamlit-expanderContent {{
+        background-color: #1e1e1e;
+        border: 1px solid #303030;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        padding: 1rem !important;
+    }}
+
+    /* Metric boxes - Card styling */
+    .metric-card {{
+        background-color: #252525;
+        border: 1px solid #303030;
+        border-radius: 8px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+    }}
+
+    .metric-card:hover {{
+        border-color: {ACCENT_BLUE};
+        box-shadow: 0 4px 12px rgba(75, 143, 224, 0.1);
+    }}
+
+    /* Divider */
+    hr {{
+        border: none;
+        border-top: 1px solid #303030;
+        margin: 1.5rem 0;
+    }}
+
+    /* Code blocks */
+    .stCodeBlock {{
+        background-color: #0d0d0d;
+        border: 1px solid #303030;
+        border-radius: 6px;
+        padding: 1rem;
+    }}
+
+    pre {{
+        background-color: #1a1a1a;
+        border: 1px solid #303030;
+        border-radius: 6px;
+        padding: 1rem;
+        overflow-x: auto;
+    }}
+
+    code {{
+        background-color: #252525;
+        color: #e0e0e0;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        font-size: 0.85rem;
+    }}
+
+    pre code {{
+        background-color: transparent;
+        padding: 0;
+    }}
+
+    /* Tables */
+    .dataframe {{
+        background-color: #1e1e1e;
+        color: #c8c8c8;
+    }}
+
+    .dataframe th {{
+        background-color: #252525;
         color: white;
+        border-color: #303030;
+        font-weight: 600;
+    }}
+
+    .dataframe td {{
+        border-color: #303030;
+        color: #c8c8c8;
+    }}
+
+    /* Columns and containers */
+    .stColumn {{
+        padding-right: 0.5rem;
+        padding-left: 0.5rem;
+    }}
+
+    /* General container styling */
+    .element-container {{
+        color: #c8c8c8;
+        line-height: 1.6;
+    }}
+
+    /* Custom card container */
+    .custom-card {{
+        background-color: #252525;
+        border: 1px solid #303030;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }}
+
+    .custom-card:hover {{
+        border-color: {ACCENT_BLUE};
+        box-shadow: 0 4px 12px rgba(75, 143, 224, 0.1);
+    }}
+
+    /* Smooth transitions */
+    * {{
+        transition-property: background-color, border-color, color, box-shadow;
+        transition-duration: 0.2s;
+        transition-timing-function: ease;
+    }}
+
+    input, textarea, select, button {{
+        transition-property: all;
+        transition-duration: 0.3s;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -145,57 +453,176 @@ def reset_workflow():
 
 
 def show_progress():
-    """Show progress indicator."""
+    """Show progress indicator with enhanced styling."""
     stages = ["📝 Input", "🎤 Transcribe", "🔒 Filter", "🔍 Analyze", "🎨 Theme", "✍️ Write", "🚀 SEO", "✅ QA", "📦 Complete"]
     current_stage = st.session_state.stage
 
-    cols = st.columns(len(stages))
+    # Create visual progress bar
+    st.markdown(f"""
+    <div style="margin-bottom: 1.5rem;">
+        <div style="
+            background-color: #303030;
+            height: 4px;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        ">
+            <div style="
+                background: linear-gradient(90deg, #FF0000 0%, #ff3333 100%);
+                height: 100%;
+                width: {(current_stage / len(stages)) * 100}%;
+                transition: width 0.5s ease;
+                border-radius: 2px;
+            "></div>
+        </div>
+        <div style="
+            display: flex;
+            justify-content: space-between;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        ">
+    """, unsafe_allow_html=True)
+
+    cols = st.columns(len(stages), gap="small")
     for i, (col, stage_name) in enumerate(zip(cols, stages)):
         with col:
             if i < current_stage:
-                st.success(stage_name)
+                # Completed stages - green with checkmark
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #0F9D58 0%, #089d42 100%);
+                    border: 2px solid #0F9D58;
+                    border-radius: 6px;
+                    padding: 0.6rem 0.4rem;
+                    text-align: center;
+                    font-weight: 600;
+                    font-size: 0.75rem;
+                    color: white;
+                    box-shadow: 0 2px 8px rgba(15, 157, 88, 0.3);
+                ">
+                    {stage_name}
+                </div>
+                """, unsafe_allow_html=True)
             elif i == current_stage:
-                st.info(f"**{stage_name}**")
+                # Current stage - red with highlight
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #FF0000 0%, #ff3333 100%);
+                    border: 2px solid #FF0000;
+                    border-radius: 6px;
+                    padding: 0.6rem 0.4rem;
+                    text-align: center;
+                    font-weight: 700;
+                    font-size: 0.75rem;
+                    color: white;
+                    box-shadow: 0 2px 12px rgba(255, 0, 0, 0.4);
+                    animation: pulse 2s infinite;
+                ">
+                    {stage_name}
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                st.text(stage_name)
+                # Future stages - gray
+                st.markdown(f"""
+                <div style="
+                    background-color: #303030;
+                    border: 2px solid #404040;
+                    border-radius: 6px;
+                    padding: 0.6rem 0.4rem;
+                    text-align: center;
+                    font-weight: 500;
+                    font-size: 0.75rem;
+                    color: #808080;
+                    transition: all 0.3s ease;
+                ">
+                    {stage_name}
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Add animation keyframes
+    st.markdown("""
+    <style>
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 2px 12px rgba(255, 0, 0, 0.4); }
+            50% { box-shadow: 0 4px 20px rgba(255, 0, 0, 0.6); }
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def stage0_input():
     """Stage 0: YouTube URL Input"""
     st.title("🎥 YouTube to Article Converter")
-    st.markdown("---")
 
+    # Hero section with better styling
     st.markdown("""
-    ### Welcome!
-    Convert any YouTube video into an SEO-optimized article.
+    <div style="
+        background: linear-gradient(135deg, rgba(255, 0, 0, 0.1) 0%, rgba(75, 143, 224, 0.05) 100%);
+        border: 1px solid rgba(75, 143, 224, 0.3);
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    ">
+        <h2 style="color: white; margin-top: 0;">Welcome to YouTube to Article Converter</h2>
+        <p style="color: #c8c8c8; font-size: 1.05rem; margin-bottom: 1.5rem;">
+            Transform any YouTube video into a professional, SEO-optimized article with AI-powered processing.
+        </p>
+        <div style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        ">
+            <div style="padding: 0.75rem; background-color: rgba(255, 0, 0, 0.1); border-left: 3px solid #FF0000; border-radius: 4px;">
+                <strong style="color: #FF0000;">1. Input URL</strong>
+                <p style="color: #b0b0b0; font-size: 0.85rem; margin-top: 0.25rem;">📝 Paste video link</p>
+            </div>
+            <div style="padding: 0.75rem; background-color: rgba(75, 143, 224, 0.1); border-left: 3px solid #4B8FE0; border-radius: 4px;">
+                <strong style="color: #4B8FE0;">2. Extract</strong>
+                <p style="color: #b0b0b0; font-size: 0.85rem; margin-top: 0.25rem;">🎤 Get transcript</p>
+            </div>
+            <div style="padding: 0.75rem; background-color: rgba(15, 157, 88, 0.1); border-left: 3px solid #0F9D58; border-radius: 4px;">
+                <strong style="color: #0F9D58;">3. Process</strong>
+                <p style="color: #b0b0b0; font-size: 0.85rem; margin-top: 0.25rem;">✍️ Generate article</p>
+            </div>
+            <div style="padding: 0.75rem; background-color: rgba(240, 140, 33, 0.1); border-left: 3px solid #F08C21; border-radius: 4px;">
+                <strong style="color: #F08C21;">4. Optimize</strong>
+                <p style="color: #b0b0b0; font-size: 0.85rem; margin-top: 0.25rem;">🚀 SEO & export</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    **How it works:**
-    1. 📝 Paste YouTube URL
-    2. 🎤 Extract & review transcript
-    3. 🔍 Analyze content structure
-    4. ✍️ Generate article with AI
-    5. 🚀 Add SEO optimization
-    6. ✅ Download your article
-    """)
+    # URL input section
+    st.markdown("<div style='margin-bottom: 1.5rem;'><h3 style='margin-top: 0;'>Get Started</h3></div>", unsafe_allow_html=True)
 
-    st.markdown("---")
-
-    # URL input
     youtube_url = st.text_input(
         "Enter YouTube Video URL",
-        placeholder="https://www.youtube.com/watch?v=...",
+        placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         value=st.session_state.youtube_url
     )
 
-    # Example URLs
-    with st.expander("📌 Example URLs"):
-        st.code("https://www.youtube.com/watch?v=jNQXAC9IVRw")
-        st.code("https://youtu.be/dQw4w9WgXcQ")
+    # Example URLs in a card
+    with st.expander("📌 Example Videos", expanded=False):
+        st.markdown("""
+        <div style="display: grid; gap: 0.5rem;">
+            <div style="padding: 0.75rem; background-color: #252525; border-radius: 4px; font-family: monospace; color: #4B8FE0;">
+                https://www.youtube.com/watch?v=jNQXAC9IVRw
+            </div>
+            <div style="padding: 0.75rem; background-color: #252525; border-radius: 4px; font-family: monospace; color: #4B8FE0;">
+                https://youtu.be/dQw4w9WgXcQ
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns([3, 1])
+    st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+
+    # Action buttons and options
+    col1, col2 = st.columns([3, 1], gap="medium")
 
     with col1:
-        if st.button("🚀 Start Conversion", type="primary"):
+        if st.button("🚀 Start Conversion", type="primary", use_container_width=True):
             if youtube_url:
                 st.session_state.youtube_url = youtube_url
                 st.session_state.stage = 1
@@ -204,7 +631,8 @@ def stage0_input():
                 st.error("Please enter a YouTube URL")
 
     with col2:
-        force_whisper = st.checkbox("Force Whisper", help="Skip captions, use Whisper transcription")
+        st.markdown("<div style='height: 2.5rem; display: flex; align-items: center;'><label style='color: #c8c8c8;'>⚙️</label></div>", unsafe_allow_html=True)
+        force_whisper = st.checkbox("Force Whisper", help="Skip YouTube captions and use Whisper transcription", value=False)
         st.session_state.force_whisper = force_whisper
 
 
@@ -212,7 +640,6 @@ def stage1_transcribe():
     """Stage 1: Transcription"""
     st.title("🎤 Stage 1: Transcription")
     show_progress()
-    st.markdown("---")
 
     if st.session_state.transcript is None:
         # Create status containers
@@ -338,7 +765,6 @@ def stage2_filter():
     """Stage 2: Content Filtering & Policy Compliance"""
     st.title("🔒 Stage 2: Content Filtering & Policy Compliance")
     show_progress()
-    st.markdown("---")
 
     if st.session_state.content_filter is None:
         # Create status containers
@@ -371,7 +797,7 @@ def stage2_filter():
     # Show filtering results
     content_filter = st.session_state.content_filter
 
-    # Overall compliance status
+    # Overall compliance status with enhanced styling
     compliance_colors = {
         "compliant": "#0F9D58",
         "warning": "#FBBC04",
@@ -380,22 +806,53 @@ def stage2_filter():
     }
     color = compliance_colors.get(content_filter.overall_compliance, "#909090")
 
-    col1, col2 = st.columns([2, 3])
+    col1, col2 = st.columns([2, 3], gap="medium")
     with col1:
         st.markdown(f"""
-        <div style="background-color: {color}; padding: 20px; border-radius: 8px; text-align: center;">
-            <h2 style="color: white; margin: 0;">Policy Check</h2>
-            <h1 style="color: white; margin: 10px 0 0 0;">{content_filter.overall_compliance.upper()}</h1>
+        <div style="
+            background: linear-gradient(135deg, {color} 0%, {color}dd 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid {color};
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        ">
+            <h3 style="color: white; margin: 0 0 0.5rem 0;">Policy Check</h3>
+            <h1 style="color: white; margin: 0.5rem 0 0 0; font-size: 2rem;">{content_filter.overall_compliance.upper()}</h1>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
-        st.markdown("#### 📊 Content Metrics")
-        st.info(f"**Promotional Score:** {content_filter.promotional_score:.1%}")
-        st.info(f"**Sponsor Mentions:** {len(content_filter.sponsor_mentions)}")
-        st.info(f"**Policy Flags:** {len(content_filter.flags)}")
+        st.markdown("<h4 style='margin-top: 0;'>📊 Content Metrics</h4>", unsafe_allow_html=True)
 
-    st.markdown("---")
+        metric_col1, metric_col2 = st.columns(2, gap="small")
+        with metric_col1:
+            st.markdown(f"""
+            <div style="
+                background-color: #252525;
+                border: 1px solid #303030;
+                border-radius: 8px;
+                padding: 1rem;
+                text-align: center;
+            ">
+                <div style="color: #c8c8c8; font-size: 0.85rem; margin-bottom: 0.5rem;">Promotional</div>
+                <div style="color: #FF0000; font-size: 1.5rem; font-weight: 700;">{content_filter.promotional_score:.0%}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with metric_col2:
+            st.markdown(f"""
+            <div style="
+                background-color: #252525;
+                border: 1px solid #303030;
+                border-radius: 8px;
+                padding: 1rem;
+                text-align: center;
+            ">
+                <div style="color: #c8c8c8; font-size: 0.85rem; margin-bottom: 0.5rem;">Flags</div>
+                <div style="color: #4B8FE0; font-size: 1.5rem; font-weight: 700;">{len(content_filter.flags)}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # Summary
     st.subheader("📋 Filtering Summary")
