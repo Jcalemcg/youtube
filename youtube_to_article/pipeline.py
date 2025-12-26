@@ -21,6 +21,7 @@ from models.schemas import (
     QualityAssessment,
     ContentFilterResult
 )
+from progress import ProgressTracker, create_progress_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +39,19 @@ class YouTubeToArticlePipeline:
     Supports both full pipeline and stage-by-stage execution for UI interaction.
     """
 
-    def __init__(self, config: Optional[PipelineConfig] = None):
+    def __init__(self, config: Optional[PipelineConfig] = None, progress_tracker: Optional[ProgressTracker] = None):
         """
         Initialize the pipeline.
 
         Args:
             config: Pipeline configuration (loads from env if not provided)
+            progress_tracker: Optional ProgressTracker for real-time feedback (creates new if not provided)
         """
         if config is None:
             config = get_config()
 
         self.config = config
+        self.progress_tracker = progress_tracker or create_progress_tracker(max_stages=9)
 
         # Initialize agents
         logger.info("Initializing pipeline agents...")
@@ -78,10 +81,59 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 1: TRANSCRIPTION")
         logger.info("=" * 60)
 
-        result = self.transcriber.run(youtube_url, force_whisper=force_whisper)
+        self.progress_tracker.start_stage(0, "transcription")
 
-        logger.info(f"✓ Stage 1 complete: {len(result.segments)} segments transcribed")
-        return result
+        try:
+            # Check for cancellation
+            if self.progress_tracker.is_cancelled():
+                raise RuntimeError("Pipeline execution cancelled by user")
+
+            self.progress_tracker.update(
+                step="fetching_metadata",
+                message="Extracting video ID and fetching metadata...",
+                progress=0.1
+            )
+
+            # Check for cancellation
+            if self.progress_tracker.is_cancelled():
+                raise RuntimeError("Pipeline execution cancelled by user")
+
+            self.progress_tracker.update(
+                step="extracting_transcript",
+                message="Extracting transcript from video...",
+                progress=0.3
+            )
+
+            result = self.transcriber.run(youtube_url, force_whisper=force_whisper)
+
+            self.progress_tracker.update(
+                step="processing_segments",
+                message=f"Processing {len(result.segments)} transcript segments...",
+                progress=0.9
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message=f"✓ Transcription complete: {len(result.segments)} segments extracted",
+                details={
+                    "segments": len(result.segments),
+                    "title": result.title,
+                    "duration": result.duration_seconds
+                }
+            )
+
+            self.progress_tracker.complete_stage("transcription")
+            logger.info(f"✓ Stage 1 complete: {len(result.segments)} segments transcribed")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 1 transcription: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="transcription_failed",
+                message="Transcription failed",
+                error_msg=str(e)
+            )
+            raise
 
     def stage1_5_filter(self, transcript: TranscriptResult) -> ContentFilterResult:
         """
@@ -97,13 +149,48 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 1.5: CONTENT FILTERING")
         logger.info("=" * 60)
 
-        result = self.content_filter.filter_transcript(transcript)
+        self.progress_tracker.start_stage(1, "content_filtering")
 
-        logger.info(f"✓ Stage 1.5 complete: Compliance status '{result.overall_compliance}'")
-        if result.flags:
-            logger.info(f"  {len(result.flags)} issue(s) detected")
-        logger.info(f"  Promotional score: {result.promotional_score:.1%}")
-        return result
+        try:
+            self.progress_tracker.update(
+                step="analyzing_content",
+                message="Analyzing content for policy compliance...",
+                progress=0.3
+            )
+
+            result = self.content_filter.filter_transcript(transcript)
+
+            self.progress_tracker.update(
+                step="checking_compliance",
+                message="Checking compliance and quality metrics...",
+                progress=0.7
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message=f"✓ Content filtering complete: Status '{result.overall_compliance}'",
+                details={
+                    "compliance_status": result.overall_compliance,
+                    "issues_detected": len(result.flags),
+                    "promotional_score": f"{result.promotional_score:.1%}"
+                }
+            )
+
+            self.progress_tracker.complete_stage("content_filtering")
+            logger.info(f"✓ Stage 1.5 complete: Compliance status '{result.overall_compliance}'")
+            if result.flags:
+                logger.info(f"  {len(result.flags)} issue(s) detected")
+            logger.info(f"  Promotional score: {result.promotional_score:.1%}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 1.5 content filtering: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="filtering_failed",
+                message="Content filtering failed",
+                error_msg=str(e)
+            )
+            raise
 
     def stage2_analyze(self, transcript: TranscriptResult) -> ContentAnalysis:
         """
@@ -119,10 +206,51 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 2: CONTENT ANALYSIS")
         logger.info("=" * 60)
 
-        result = self.analyzer.run(transcript)
+        self.progress_tracker.start_stage(2, "content_analysis")
 
-        logger.info(f"✓ Stage 2 complete: {len(result.suggested_sections)} sections identified")
-        return result
+        try:
+            self.progress_tracker.update(
+                step="identifying_topics",
+                message="Identifying key topics and themes...",
+                progress=0.2
+            )
+
+            self.progress_tracker.update(
+                step="structuring_content",
+                message="Analyzing content structure and sections...",
+                progress=0.5
+            )
+
+            result = self.analyzer.run(transcript)
+
+            self.progress_tracker.update(
+                step="generating_metadata",
+                message="Generating analysis metadata...",
+                progress=0.9
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message=f"✓ Content analysis complete: {len(result.suggested_sections)} sections identified",
+                details={
+                    "sections": len(result.suggested_sections),
+                    "main_topic": result.main_topic,
+                    "key_themes": len(result.key_themes)
+                }
+            )
+
+            self.progress_tracker.complete_stage("content_analysis")
+            logger.info(f"✓ Stage 2 complete: {len(result.suggested_sections)} sections identified")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 2 content analysis: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="analysis_failed",
+                message="Content analysis failed",
+                error_msg=str(e)
+            )
+            raise
 
     def stage3_write(
         self,
@@ -143,10 +271,51 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 3: ARTICLE GENERATION")
         logger.info("=" * 60)
 
-        result = self.writer.run(transcript, analysis, theme=None)
+        self.progress_tracker.start_stage(3, "article_writing")
 
-        logger.info(f"✓ Stage 3 complete: {result.word_count} words written")
-        return result
+        try:
+            self.progress_tracker.update(
+                step="generating_structure",
+                message="Creating article structure and outline...",
+                progress=0.1
+            )
+
+            self.progress_tracker.update(
+                step="writing_content",
+                message="Writing article content and sections...",
+                progress=0.5
+            )
+
+            result = self.writer.run(transcript, analysis, theme=None)
+
+            self.progress_tracker.update(
+                step="formatting",
+                message="Formatting article with metadata...",
+                progress=0.9
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message=f"✓ Article writing complete: {result.word_count} words",
+                details={
+                    "word_count": result.word_count,
+                    "sections": len(result.sections),
+                    "title": result.title
+                }
+            )
+
+            self.progress_tracker.complete_stage("article_writing")
+            logger.info(f"✓ Stage 3 complete: {result.word_count} words written")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 3 article writing: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="writing_failed",
+                message="Article writing failed",
+                error_msg=str(e)
+            )
+            raise
 
     def stage4_write(
         self,
@@ -170,10 +339,52 @@ class YouTubeToArticlePipeline:
         logger.info("=" * 60)
         logger.info(f"Theme: {theme.theme_style}, Audience: {theme.target_audience}, Length: {theme.article_length}")
 
-        result = self.writer.run(transcript, analysis, theme=theme)
+        self.progress_tracker.start_stage(4, "article_generation")
 
-        logger.info(f"✓ Stage 4 complete: {result.word_count} words written")
-        return result
+        try:
+            self.progress_tracker.update(
+                step="personalizing_theme",
+                message=f"Personalizing theme: {theme.theme_style}, Audience: {theme.target_audience}...",
+                progress=0.1
+            )
+
+            self.progress_tracker.update(
+                step="writing_with_theme",
+                message="Writing article with theme preferences...",
+                progress=0.5
+            )
+
+            result = self.writer.run(transcript, analysis, theme=theme)
+
+            self.progress_tracker.update(
+                step="finalizing_article",
+                message="Finalizing article content...",
+                progress=0.9
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message=f"✓ Article generation complete: {result.word_count} words",
+                details={
+                    "word_count": result.word_count,
+                    "theme": theme.theme_style,
+                    "audience": theme.target_audience,
+                    "length": theme.article_length
+                }
+            )
+
+            self.progress_tracker.complete_stage("article_generation")
+            logger.info(f"✓ Stage 4 complete: {result.word_count} words written")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 4 article generation: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="generation_failed",
+                message="Article generation failed",
+                error_msg=str(e)
+            )
+            raise
 
     def stage4_optimize_seo(
         self,
@@ -196,21 +407,61 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 4: SEO OPTIMIZATION")
         logger.info("=" * 60)
 
-        # Create VideoMetadata from transcript
-        video_meta = VideoMetadata(
-            video_id=transcript.video_id,
-            url=f"https://youtube.com/watch?v={transcript.video_id}",
-            title=transcript.title,
-            channel=transcript.channel,
-            duration_seconds=transcript.duration_seconds,
-            thumbnail_url=transcript.thumbnail_url,
-            upload_date=transcript.upload_date
-        )
+        self.progress_tracker.start_stage(5, "seo_optimization")
 
-        result = self.seo.run(article, analysis, video_meta)
+        try:
+            self.progress_tracker.update(
+                step="generating_keywords",
+                message="Generating SEO keywords and target phrases...",
+                progress=0.2
+            )
 
-        logger.info(f"✓ Stage 4 complete: SEO package generated")
-        return result
+            self.progress_tracker.update(
+                step="optimizing_metadata",
+                message="Optimizing meta tags and descriptions...",
+                progress=0.5
+            )
+
+            # Create VideoMetadata from transcript
+            video_meta = VideoMetadata(
+                video_id=transcript.video_id,
+                url=f"https://youtube.com/watch?v={transcript.video_id}",
+                title=transcript.title,
+                channel=transcript.channel,
+                duration_seconds=transcript.duration_seconds,
+                thumbnail_url=transcript.thumbnail_url,
+                upload_date=transcript.upload_date
+            )
+
+            result = self.seo.run(article, analysis, video_meta)
+
+            self.progress_tracker.update(
+                step="generating_content",
+                message="Generating social media and promotional content...",
+                progress=0.9
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message="✓ SEO optimization complete: Package generated",
+                details={
+                    "keywords": len(result.keywords),
+                    "meta_tags": len(result.meta_tags) if result.meta_tags else 0
+                }
+            )
+
+            self.progress_tracker.complete_stage("seo_optimization")
+            logger.info(f"✓ Stage 4 complete: SEO package generated")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 4 SEO optimization: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="seo_failed",
+                message="SEO optimization failed",
+                error_msg=str(e)
+            )
+            raise
 
     def stage5_assess_quality(
         self,
@@ -233,12 +484,53 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 5: QUALITY ASSESSMENT")
         logger.info("=" * 60)
 
-        result = self.qa.assess_quality(article, analysis, seo)
+        self.progress_tracker.start_stage(6, "quality_assessment")
 
-        logger.info(f"✓ Stage 5 complete: Quality {result.quality_rating.upper()} ({result.overall_score:.1f}/100)")
-        if result.recommendations:
-            logger.info(f"  {len(result.recommendations)} recommendations generated")
-        return result
+        try:
+            self.progress_tracker.update(
+                step="analyzing_readability",
+                message="Analyzing article readability and clarity...",
+                progress=0.2
+            )
+
+            self.progress_tracker.update(
+                step="checking_structure",
+                message="Checking content structure and coherence...",
+                progress=0.5
+            )
+
+            result = self.qa.assess_quality(article, analysis, seo)
+
+            self.progress_tracker.update(
+                step="generating_recommendations",
+                message="Generating improvement recommendations...",
+                progress=0.9
+            )
+
+            self.progress_tracker.step(
+                step="complete",
+                message=f"✓ Quality assessment complete: {result.quality_rating.upper()} ({result.overall_score:.1f}/100)",
+                details={
+                    "quality_rating": result.quality_rating,
+                    "overall_score": result.overall_score,
+                    "recommendations": len(result.recommendations) if result.recommendations else 0
+                }
+            )
+
+            self.progress_tracker.complete_stage("quality_assessment")
+            logger.info(f"✓ Stage 5 complete: Quality {result.quality_rating.upper()} ({result.overall_score:.1f}/100)")
+            if result.recommendations:
+                logger.info(f"  {len(result.recommendations)} recommendations generated")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in stage 5 quality assessment: {e}", exc_info=True)
+            self.progress_tracker.error(
+                step="quality_assessment_failed",
+                message="Quality assessment failed",
+                error_msg=str(e)
+            )
+            raise
 
     # Full pipeline execution
 
@@ -370,15 +662,28 @@ class YouTubeToArticlePipeline:
 
         return video_dir
 
+    def get_progress_tracker(self) -> ProgressTracker:
+        """
+        Get the pipeline's progress tracker.
 
-def create_pipeline(config: Optional[PipelineConfig] = None) -> YouTubeToArticlePipeline:
+        Returns:
+            ProgressTracker instance
+        """
+        return self.progress_tracker
+
+
+def create_pipeline(
+    config: Optional[PipelineConfig] = None,
+    progress_tracker: Optional[ProgressTracker] = None
+) -> YouTubeToArticlePipeline:
     """
     Factory function to create a pipeline.
 
     Args:
         config: Pipeline configuration (loads from env if not provided)
+        progress_tracker: Optional ProgressTracker for real-time feedback
 
     Returns:
         Configured YouTubeToArticlePipeline instance
     """
-    return YouTubeToArticlePipeline(config)
+    return YouTubeToArticlePipeline(config, progress_tracker)
