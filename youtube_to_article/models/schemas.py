@@ -62,6 +62,46 @@ class ContentAnalysis(BaseModel):
 
 
 # ============================================================================
+# Stage 2.5: Article Theme Selection
+# ============================================================================
+
+class ArticleTheme(BaseModel):
+    """User-selected article theme and style preferences."""
+    theme_style: Literal["professional", "casual", "news", "how-to", "opinion"] = Field(
+        description="Overall article style/tone",
+        default="professional"
+    )
+    target_audience: Literal["expert", "beginner", "general"] = Field(
+        description="Target audience level",
+        default="general"
+    )
+    article_length: Literal["concise", "standard", "comprehensive"] = Field(
+        description="Article length preference",
+        default="standard"
+    )
+    tone_adjustment: Literal["creative", "neutral", "formal"] = Field(
+        description="Fine-tune the tone",
+        default="neutral"
+    )
+    visual_preference: Literal["balanced", "code-heavy", "minimal"] = Field(
+        description="Preference for visual elements and code blocks",
+        default="balanced"
+    )
+    use_examples: bool = Field(
+        description="Include practical examples and case studies",
+        default=True
+    )
+    include_quotes: bool = Field(
+        description="Include relevant quotes from the video",
+        default=True
+    )
+    custom_focus: Optional[str] = Field(
+        default=None,
+        description="Additional focus areas or customization notes"
+    )
+
+
+# ============================================================================
 # Agent 3: Article Writer Output
 # ============================================================================
 

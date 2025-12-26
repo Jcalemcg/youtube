@@ -6,6 +6,7 @@ from huggingface_hub import InferenceClient
 from models.schemas import (
     TranscriptResult,
     ContentAnalysis,
+    ArticleTheme,
     Article,
     ArticleSection
 )
@@ -39,16 +40,80 @@ class WriterAgent:
 
         logger.info(f"Writer agent initialized with model: {self.model}")
 
+    def _build_theme_instructions(self, theme: ArticleTheme) -> str:
+        """Build theme-specific instructions for the LLM."""
+        instructions = "\n\nCUSTOM THEME PREFERENCES:\n"
+
+        # Theme style instructions
+        style_guidance = {
+            "professional": "Write in a formal, authoritative tone. Use technical terminology appropriately. Focus on credibility and professionalism.",
+            "casual": "Write in a friendly, conversational tone. Use colloquial language where appropriate. Make the content relatable and engaging.",
+            "news": "Write as a journalist would. Focus on facts, objectivity, and newsworthiness. Use the inverted pyramid structure (most important info first).",
+            "how-to": "Write step-by-step instructions. Use imperative language ('Do this', 'Follow this'). Include clear action items and practical guidance.",
+            "opinion": "Include editorial perspective and analysis. Use stronger statements and interpretations. Include thoughtful commentary and expert perspective."
+        }
+        instructions += f"- Theme: {style_guidance.get(theme.theme_style, '')}\n"
+
+        # Article length instructions
+        length_guidance = {
+            "concise": "Keep the article brief and to the point. Aim for ~800-1000 words. Use bullet points and short paragraphs.",
+            "standard": "Write a standard-length article with good depth. Aim for ~1500-2000 words. Balance detail with readability.",
+            "comprehensive": "Create an in-depth, thorough article. Aim for ~2500-3500 words. Include detailed explanations and multiple examples."
+        }
+        instructions += f"- Length: {length_guidance.get(theme.article_length, '')}\n"
+
+        # Audience instructions
+        audience_guidance = {
+            "expert": "Write for experts who have deep domain knowledge. Use technical jargon and advanced concepts. Skip basic explanations.",
+            "beginner": "Write for beginners with minimal background. Explain concepts clearly. Avoid jargon or define all terms used.",
+            "general": "Write for a general audience. Use accessible language. Include brief explanations of concepts that may be unfamiliar."
+        }
+        instructions += f"- Audience: {audience_guidance.get(theme.target_audience, '')}\n"
+
+        # Tone adjustment
+        tone_guidance = {
+            "creative": "Use creative language, metaphors, and engaging examples. Prioritize engagement and entertainment value.",
+            "neutral": "Maintain a balanced, objective tone. Present information without excessive emotion or opinion.",
+            "formal": "Use formal, professional language throughout. Maintain a serious, authoritative tone."
+        }
+        instructions += f"- Tone Adjustment: {tone_guidance.get(theme.tone_adjustment, '')}\n"
+
+        # Visual preferences
+        if theme.visual_preference == "code-heavy":
+            instructions += "- Visual: Include code examples, technical diagrams, and snippets throughout the article. Use code blocks liberally.\n"
+        elif theme.visual_preference == "minimal":
+            instructions += "- Visual: Minimize code blocks and technical diagrams. Focus on prose. Use lists and bold text sparingly.\n"
+        else:
+            instructions += "- Visual: Include a balanced mix of tables, lists, code blocks, and prose. Use visual elements where they enhance understanding.\n"
+
+        # Additional options
+        if not theme.use_examples:
+            instructions += "- Avoid including practical examples or case studies.\n"
+        if not theme.include_quotes:
+            instructions += "- Minimize or exclude direct quotes from the video transcript.\n"
+
+        # Custom focus
+        if theme.custom_focus:
+            instructions += f"- Custom Focus: {theme.custom_focus}\n"
+
+        return instructions
+
     def _build_writer_prompt(
         self,
         transcript: TranscriptResult,
-        analysis: ContentAnalysis
+        analysis: ContentAnalysis,
+        theme: Optional[ArticleTheme] = None
     ) -> str:
         """Build the article writing prompt for the LLM."""
         sections_description = "\n".join([
             f"- {section.title}: {section.description}"
             for section in analysis.suggested_sections
         ])
+
+        # Build theme instructions if provided
+        theme_instructions = ""
+        if theme:
+            theme_instructions = self._build_theme_instructions(theme)
 
         return f"""You are a professional content writer converting video content to a polished article.
 
@@ -86,13 +151,14 @@ STYLE REQUIREMENTS:
 - Use markdown formatting (headers, bold, lists, etc.)
 - Maintain the {analysis.tone} tone
 - Target {analysis.estimated_reading_time} minute read (~{analysis.estimated_reading_time * 200} words)
-
+{theme_instructions}
 Return the article in proper markdown format with clear section headers (## for main sections)."""
 
     def run(
         self,
         transcript: TranscriptResult,
-        analysis: ContentAnalysis
+        analysis: ContentAnalysis,
+        theme: Optional[ArticleTheme] = None
     ) -> Article:
         """
         Generate article from transcript and analysis.
@@ -100,6 +166,7 @@ Return the article in proper markdown format with clear section headers (## for 
         Args:
             transcript: Transcript result from Agent 1
             analysis: Content analysis from Agent 2
+            theme: Optional article theme preferences from Stage 2.5
 
         Returns:
             Article with generated content
@@ -110,7 +177,7 @@ Return the article in proper markdown format with clear section headers (## for 
         logger.info(f"Generating article for video: {transcript.video_id}")
 
         # Build prompt
-        prompt = self._build_writer_prompt(transcript, analysis)
+        prompt = self._build_writer_prompt(transcript, analysis, theme)
 
         # Call HuggingFace Inference API
         try:

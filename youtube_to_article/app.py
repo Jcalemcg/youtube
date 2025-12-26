@@ -110,13 +110,15 @@ st.markdown(f"""
 def init_session_state():
     """Initialize session state variables."""
     if 'stage' not in st.session_state:
-        st.session_state.stage = 0  # 0=input, 1=transcribe, 2=analyze, 3=write, 4=seo, 5=complete
+        st.session_state.stage = 0  # 0=input, 1=transcribe, 2=analyze, 3=theme, 4=write, 5=seo, 6=complete
     if 'pipeline' not in st.session_state:
         st.session_state.pipeline = None
     if 'transcript' not in st.session_state:
         st.session_state.transcript = None
     if 'analysis' not in st.session_state:
         st.session_state.analysis = None
+    if 'theme' not in st.session_state:
+        st.session_state.theme = None
     if 'article' not in st.session_state:
         st.session_state.article = None
     if 'seo' not in st.session_state:
@@ -130,6 +132,7 @@ def reset_workflow():
     st.session_state.stage = 0
     st.session_state.transcript = None
     st.session_state.analysis = None
+    st.session_state.theme = None
     st.session_state.article = None
     st.session_state.seo = None
     st.session_state.youtube_url = ""
@@ -137,7 +140,7 @@ def reset_workflow():
 
 def show_progress():
     """Show progress indicator."""
-    stages = ["📝 Input", "🎤 Transcribe", "🔍 Analyze", "✍️ Write", "🚀 SEO", "✅ Complete"]
+    stages = ["📝 Input", "🎤 Transcribe", "🔍 Analyze", "🎨 Theme", "✍️ Write", "🚀 SEO", "✅ Complete"]
     current_stage = st.session_state.stage
 
     cols = st.columns(len(stages))
@@ -395,14 +398,142 @@ def stage2_analyze():
             st.rerun()
 
     with col2:
-        if st.button("✓ Approve & Generate Article →", type="primary"):
+        if st.button("✓ Approve & Select Theme →", type="primary"):
             st.session_state.stage = 3
             st.rerun()
 
 
-def stage3_write():
-    """Stage 3: Article Generation"""
-    st.title("✍️ Stage 3: Article Generation")
+def stage3_select_theme():
+    """Stage 3: Article Theme Selection"""
+    st.title("🎨 Stage 3: Select Article Theme")
+    show_progress()
+    st.markdown("---")
+
+    # Show analysis summary
+    st.subheader("📌 Content Summary")
+    analysis = st.session_state.analysis
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Main Topic", analysis.main_topic[:40] + "...")
+    with col2:
+        st.metric("Suggested Sections", len(analysis.suggested_sections))
+
+    st.markdown("---")
+
+    st.subheader("🎨 Customize Your Article Theme")
+    st.markdown("Choose how your article should be written:")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 📖 Theme Style")
+        theme_style = st.radio(
+            "Select article style:",
+            options=["professional", "casual", "news", "how-to", "opinion"],
+            format_func=lambda x: {
+                "professional": "👔 Professional (formal, authoritative)",
+                "casual": "😊 Casual (friendly, conversational)",
+                "news": "📰 News (objective, journalistic)",
+                "how-to": "🔧 How-To (step-by-step, actionable)",
+                "opinion": "💭 Opinion (editorial, perspective)"
+            }[x],
+            key="theme_style"
+        )
+
+        st.markdown("#### 👥 Target Audience")
+        target_audience = st.radio(
+            "Who is this for?",
+            options=["expert", "beginner", "general"],
+            format_func=lambda x: {
+                "expert": "🧠 Experts (deep technical knowledge)",
+                "beginner": "🌱 Beginners (beginner-friendly)",
+                "general": "👨‍👩‍👧 General (broad audience)"
+            }[x],
+            key="target_audience"
+        )
+
+        st.markdown("#### 📏 Article Length")
+        article_length = st.radio(
+            "How long should it be?",
+            options=["concise", "standard", "comprehensive"],
+            format_func=lambda x: {
+                "concise": "📄 Concise (quick read)",
+                "standard": "📰 Standard (normal length)",
+                "comprehensive": "📚 Comprehensive (in-depth)"
+            }[x],
+            key="article_length"
+        )
+
+    with col2:
+        st.markdown("#### 💬 Tone Adjustment")
+        tone_adjustment = st.radio(
+            "Fine-tune the tone:",
+            options=["creative", "neutral", "formal"],
+            format_func=lambda x: {
+                "creative": "✨ Creative (more engaging)",
+                "neutral": "⚖️ Neutral (balanced)",
+                "formal": "🎩 Formal (very professional)"
+            }[x],
+            key="tone_adjustment"
+        )
+
+        st.markdown("#### 🎬 Visual Preference")
+        visual_preference = st.radio(
+            "Visual elements:",
+            options=["balanced", "code-heavy", "minimal"],
+            format_func=lambda x: {
+                "balanced": "⚖️ Balanced (tables, lists, code)",
+                "code-heavy": "💻 Code-Heavy (more code examples)",
+                "minimal": "📝 Minimal (mostly text)"
+            }[x],
+            key="visual_preference"
+        )
+
+        st.markdown("#### ✨ Additional Options")
+        use_examples = st.checkbox("Include practical examples & case studies", value=True, key="use_examples")
+        include_quotes = st.checkbox("Include quotes from the video", value=True, key="include_quotes")
+
+    st.markdown("---")
+
+    st.markdown("#### 📝 Custom Focus (Optional)")
+    custom_focus = st.text_area(
+        "Any specific areas to focus on or avoid?",
+        placeholder="E.g., 'Focus on ROI implications' or 'Avoid technical jargon'",
+        key="custom_focus"
+    )
+
+    st.markdown("---")
+
+    # Actions
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        if st.button("← Back"):
+            st.session_state.stage = 2
+            st.rerun()
+
+    with col2:
+        if st.button("✓ Generate Article with Theme →", type="primary"):
+            # Create ArticleTheme object
+            from models.schemas import ArticleTheme
+            theme = ArticleTheme(
+                theme_style=st.session_state.theme_style,
+                target_audience=st.session_state.target_audience,
+                article_length=st.session_state.article_length,
+                tone_adjustment=st.session_state.tone_adjustment,
+                visual_preference=st.session_state.visual_preference,
+                use_examples=st.session_state.use_examples,
+                include_quotes=st.session_state.include_quotes,
+                custom_focus=st.session_state.custom_focus if st.session_state.custom_focus else None
+            )
+            st.session_state.theme = theme
+            st.session_state.stage = 4
+            st.rerun()
+
+
+def stage4_write():
+    """Stage 4: Article Generation"""
+    st.title("✍️ Stage 4: Article Generation")
     show_progress()
     st.markdown("---")
 
@@ -417,9 +548,10 @@ def stage3_write():
             progress_bar.progress(0.3, text="Crafting headline and introduction...")
 
             # Run article generation
-            article = st.session_state.pipeline.stage3_write(
+            article = st.session_state.pipeline.stage4_write(
                 st.session_state.transcript,
-                st.session_state.analysis
+                st.session_state.analysis,
+                st.session_state.theme
             )
 
             progress_bar.progress(1.0, text="Article complete!")
@@ -444,7 +576,7 @@ def stage3_write():
             status_container.error(f"❌ Article generation failed: {e}")
             logger.error(f"Article generation error: {e}", exc_info=True)
             if st.button("← Back"):
-                st.session_state.stage = 2
+                st.session_state.stage = 3
                 st.rerun()
             return
 
@@ -497,19 +629,19 @@ def stage3_write():
 
     with col1:
         if st.button("← Back"):
-            st.session_state.stage = 2
+            st.session_state.stage = 3
             st.session_state.article = None
             st.rerun()
 
     with col2:
         if st.button("✓ Approve & Add SEO →", type="primary"):
-            st.session_state.stage = 4
+            st.session_state.stage = 5
             st.rerun()
 
 
-def stage4_seo():
-    """Stage 4: SEO Optimization"""
-    st.title("🚀 Stage 4: SEO Optimization")
+def stage5_seo():
+    """Stage 5: SEO Optimization"""
+    st.title("🚀 Stage 5: SEO Optimization")
     show_progress()
     st.markdown("---")
 
@@ -549,7 +681,7 @@ def stage4_seo():
             status_container.error(f"❌ SEO generation failed: {e}")
             logger.error(f"SEO error: {e}", exc_info=True)
             if st.button("← Back"):
-                st.session_state.stage = 3
+                st.session_state.stage = 4
                 st.rerun()
             return
 
@@ -589,18 +721,18 @@ def stage4_seo():
 
     with col1:
         if st.button("← Back"):
-            st.session_state.stage = 3
+            st.session_state.stage = 4
             st.session_state.seo = None
             st.rerun()
 
     with col2:
         if st.button("✓ Complete & Download →", type="primary"):
-            st.session_state.stage = 5
+            st.session_state.stage = 6
             st.rerun()
 
 
-def stage5_complete():
-    """Stage 5: Complete & Download"""
+def stage6_complete():
+    """Stage 6: Complete & Download"""
     st.title("✅ Conversion Complete!")
     show_progress()
     st.markdown("---")
@@ -667,9 +799,10 @@ def main():
             ("📝 Input", 0),
             ("🎤 Transcribe", 1),
             ("🔍 Analyze", 2),
-            ("✍️ Write", 3),
-            ("🚀 SEO", 4),
-            ("✅ Complete", 5)
+            ("🎨 Theme", 3),
+            ("✍️ Write", 4),
+            ("🚀 SEO", 5),
+            ("✅ Complete", 6)
         ]
 
         for name, stage_num in stages:
@@ -695,11 +828,13 @@ def main():
     elif st.session_state.stage == 2:
         stage2_analyze()
     elif st.session_state.stage == 3:
-        stage3_write()
+        stage3_select_theme()
     elif st.session_state.stage == 4:
-        stage4_seo()
+        stage4_write()
     elif st.session_state.stage == 5:
-        stage5_complete()
+        stage5_seo()
+    elif st.session_state.stage == 6:
+        stage6_complete()
 
 
 if __name__ == "__main__":
