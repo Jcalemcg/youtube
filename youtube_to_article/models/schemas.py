@@ -162,6 +162,78 @@ class VideoMetadata(BaseModel):
     upload_date: Optional[str] = None
 
 
+# ============================================================================
+# Quality Assurance Scoring
+# ============================================================================
+
+class ContentQualityScore(BaseModel):
+    """Content quality metrics."""
+    readability_score: float = Field(description="Readability score (0-100)", ge=0, le=100)
+    coherence_score: float = Field(description="Content coherence (0-100)", ge=0, le=100)
+    completeness_score: float = Field(description="Content completeness (0-100)", ge=0, le=100)
+    relevance_score: float = Field(description="Relevance to main topic (0-100)", ge=0, le=100)
+    uniqueness_score: float = Field(description="Originality/uniqueness (0-100)", ge=0, le=100)
+    average_score: float = Field(description="Average of all content scores (0-100)", ge=0, le=100)
+
+
+class SEOQualityScore(BaseModel):
+    """SEO quality metrics."""
+    keyword_optimization: float = Field(description="Keyword placement and density (0-100)", ge=0, le=100)
+    meta_tag_quality: float = Field(description="Quality of meta tags (0-100)", ge=0, le=100)
+    slug_quality: float = Field(description="Slug format and relevance (0-100)", ge=0, le=100)
+    schema_markup_quality: float = Field(description="Schema markup completeness (0-100)", ge=0, le=100)
+    social_media_optimization: float = Field(description="Social media metadata (0-100)", ge=0, le=100)
+    average_score: float = Field(description="Average of all SEO scores (0-100)", ge=0, le=100)
+
+
+class StructureCheck(BaseModel):
+    """Article structure validation."""
+    has_headline: bool = Field(description="Article has a headline")
+    has_introduction: bool = Field(description="Has introduction section")
+    has_sections: bool = Field(description="Has body sections")
+    has_conclusion: bool = Field(description="Has conclusion section")
+    min_word_count_met: bool = Field(description="Meets minimum word count (200 words)")
+    sections_have_content: bool = Field(description="All sections have meaningful content")
+    proper_formatting: bool = Field(description="Uses proper Markdown formatting")
+    all_checks_passed: bool = Field(description="All structure checks passed")
+    passed_checks: int = Field(description="Number of checks passed")
+    total_checks: int = Field(description="Total number of structure checks")
+
+
+class QualityRecommendation(BaseModel):
+    """Suggestion for quality improvement."""
+    category: Literal["content", "seo", "structure", "style"] = Field(description="Recommendation category")
+    severity: Literal["info", "warning", "critical"] = Field(description="Severity level")
+    message: str = Field(description="Recommendation message")
+    action: Optional[str] = Field(default=None, description="Suggested action to take")
+
+
+class QualityAssessment(BaseModel):
+    """Comprehensive quality assessment."""
+    content_quality: ContentQualityScore = Field(description="Content quality metrics")
+    seo_quality: SEOQualityScore = Field(description="SEO quality metrics")
+    structure_check: StructureCheck = Field(description="Structure validation results")
+    overall_score: float = Field(description="Overall quality score (0-100)", ge=0, le=100)
+    quality_rating: Literal["excellent", "good", "fair", "poor"] = Field(description="Quality rating category")
+    recommendations: List[QualityRecommendation] = Field(description="Improvement recommendations")
+    assessment_timestamp: datetime = Field(default_factory=datetime.now, description="Assessment timestamp")
+
+
+# ============================================================================
+# Final Pipeline Output
+# ============================================================================
+
+class VideoMetadata(BaseModel):
+    """Source video metadata."""
+    video_id: str
+    url: str
+    title: str
+    channel: str
+    duration_seconds: int
+    thumbnail_url: Optional[str] = None
+    upload_date: Optional[str] = None
+
+
 class FinalOutput(BaseModel):
     """Complete pipeline output."""
     source_video: VideoMetadata = Field(description="Source video information")
@@ -169,6 +241,7 @@ class FinalOutput(BaseModel):
     analysis: ContentAnalysis = Field(description="Content analysis")
     article: Article = Field(description="Generated article")
     seo: SEOPackage = Field(description="SEO package")
+    quality_assessment: Optional[QualityAssessment] = Field(default=None, description="Quality assessment results")
     generated_at: datetime = Field(default_factory=datetime.now, description="Generation timestamp")
     pipeline_version: str = Field(default="1.0.0", description="Pipeline version")
 
