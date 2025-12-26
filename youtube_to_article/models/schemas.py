@@ -59,6 +59,7 @@ class ContentAnalysis(BaseModel):
     target_audience: str = Field(description="Inferred target audience")
     tone: str = Field(description="Content tone (educational, entertainment, technical, etc.)")
     estimated_reading_time: int = Field(description="Estimated reading time in minutes")
+    content_flags: List[str] = Field(default_factory=list, description="List of policy or quality flags identified")
 
 
 # ============================================================================
@@ -163,6 +164,38 @@ class VideoMetadata(BaseModel):
 
 
 # ============================================================================
+# Content Filtering and Policy Compliance
+# ============================================================================
+
+class ContentPolicyFlag(BaseModel):
+    """Flag for policy violation or concerning content."""
+    category: Literal["profanity", "violence", "harassment", "hate_speech", "sponsor", "promotional", "misinformation", "spam", "copyright", "other"] = Field(
+        description="Category of policy violation"
+    )
+    severity: Literal["low", "medium", "high", "critical"] = Field(
+        description="Severity level of the flag"
+    )
+    text: str = Field(description="Offending or flagged text snippet (max 200 chars)")
+    position: Optional[str] = Field(default=None, description="Position in content (e.g., 'timestamp: 1:23', 'paragraph 3')")
+    message: str = Field(description="Human-readable explanation of the flag")
+    confidence: float = Field(description="Confidence score (0-1) for this flag", ge=0, le=1)
+
+
+class ContentFilterResult(BaseModel):
+    """Results from content filtering analysis."""
+    flags: List[ContentPolicyFlag] = Field(description="List of detected policy violations")
+    has_critical_issues: bool = Field(description="Whether any critical issues were found")
+    overall_compliance: Literal["compliant", "warning", "flagged", "blocked"] = Field(
+        description="Overall compliance status"
+    )
+    summary: str = Field(description="Summary of filtering results")
+    is_sponsor_content: bool = Field(description="Whether content is sponsored")
+    sponsor_mentions: List[str] = Field(description="List of sponsor/brand mentions detected")
+    promotional_score: float = Field(description="Score 0-1 indicating promotional content level", ge=0, le=1)
+    quality_issues: List[str] = Field(description="Non-policy quality issues detected")
+
+
+# ============================================================================
 # Quality Assurance Scoring
 # ============================================================================
 
@@ -184,6 +217,19 @@ class SEOQualityScore(BaseModel):
     schema_markup_quality: float = Field(description="Schema markup completeness (0-100)", ge=0, le=100)
     social_media_optimization: float = Field(description="Social media metadata (0-100)", ge=0, le=100)
     average_score: float = Field(description="Average of all SEO scores (0-100)", ge=0, le=100)
+
+
+class ContentPolicyScore(BaseModel):
+    """Content policy compliance metrics."""
+    profanity_free_score: float = Field(description="Freedom from profanity (0-100)", ge=0, le=100)
+    violence_free_score: float = Field(description="Freedom from violent content (0-100)", ge=0, le=100)
+    harassment_free_score: float = Field(description="Freedom from harassment content (0-100)", ge=0, le=100)
+    hate_speech_free_score: float = Field(description="Freedom from hate speech (0-100)", ge=0, le=100)
+    promotional_content_score: float = Field(description="Score for handling promotional content (0-100)", ge=0, le=100)
+    sponsor_transparency_score: float = Field(description="Transparency about sponsorships (0-100)", ge=0, le=100)
+    misinformation_free_score: float = Field(description="Freedom from misinformation (0-100)", ge=0, le=100)
+    overall_policy_compliance: float = Field(description="Overall compliance score (0-100)", ge=0, le=100)
+    policy_rating: Literal["compliant", "warning", "flagged", "blocked"] = Field(description="Policy compliance rating")
 
 
 class StructureCheck(BaseModel):
@@ -213,6 +259,7 @@ class QualityAssessment(BaseModel):
     content_quality: ContentQualityScore = Field(description="Content quality metrics")
     seo_quality: SEOQualityScore = Field(description="SEO quality metrics")
     structure_check: StructureCheck = Field(description="Structure validation results")
+    policy_compliance: Optional[ContentPolicyScore] = Field(default=None, description="Content policy compliance metrics")
     overall_score: float = Field(description="Overall quality score (0-100)", ge=0, le=100)
     quality_rating: Literal["excellent", "good", "fair", "poor"] = Field(description="Quality rating category")
     recommendations: List[QualityRecommendation] = Field(description="Improvement recommendations")
@@ -238,6 +285,7 @@ class FinalOutput(BaseModel):
     """Complete pipeline output."""
     source_video: VideoMetadata = Field(description="Source video information")
     transcript: TranscriptResult = Field(description="Transcript result")
+    content_filter: Optional[ContentFilterResult] = Field(default=None, description="Content filtering results")
     analysis: ContentAnalysis = Field(description="Content analysis")
     article: Article = Field(description="Generated article")
     seo: SEOPackage = Field(description="SEO package")
