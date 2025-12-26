@@ -18,13 +18,14 @@ from models.schemas import TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
-# User-Agent rotation pool - mimics real browser behavior
+# User-Agent rotation pool - mimics real browser behavior (updated to latest versions)
 USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
 ]
 
 # Request headers that mimic real browser behavior
@@ -110,12 +111,13 @@ def extract_video_id(url: str) -> str:
     raise YouTubeToolsError(f"Could not extract video ID from: {url}")
 
 
-def get_video_metadata(url: str) -> Dict[str, Any]:
+def get_video_metadata(url: str, use_cookies: bool = True) -> Dict[str, Any]:
     """
     Fetch video metadata using yt-dlp without downloading.
 
     Args:
         url: YouTube URL or video ID
+        use_cookies: Whether to try extracting cookies from browser (default: True)
 
     Returns:
         Dictionary with video metadata
@@ -126,20 +128,23 @@ def get_video_metadata(url: str) -> Dict[str, Any]:
     video_id = extract_video_id(url)
     full_url = f"https://www.youtube.com/watch?v={video_id}"
 
+    # Try Firefox first (more reliable than Chrome on Windows)
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
         'http_headers': get_headers(),
         'socket_timeout': 30,
-        # Bot detection prevention settings
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['web', 'android'],  # Alternate between web and android clients
-                'skip': ['hls', 'dash'],  # Skip problematic formats
-            }
-        },
     }
+
+    # Try with Firefox cookies if available
+    if use_cookies:
+        try:
+            ydl_opts['cookiesfrombrowser'] = ('firefox', None)
+            logger.info("Using Firefox cookies for authentication")
+        except Exception as e:
+            logger.debug(f"Firefox cookies unavailable: {e}")
+            # Continue without cookies
 
     try:
         apply_request_delay()  # Add delay before request
@@ -147,6 +152,7 @@ def get_video_metadata(url: str) -> Dict[str, Any]:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(full_url, download=False)
 
+            logger.info("✅ Successfully fetched metadata")
             return {
                 'video_id': video_id,
                 'url': full_url,
@@ -160,8 +166,78 @@ def get_video_metadata(url: str) -> Dict[str, Any]:
                 'like_count': info.get('like_count', 0),
             }
     except Exception as e:
-        logger.error(f"Failed to fetch metadata for {video_id}: {e}")
-        raise YouTubeToolsError(f"Failed to fetch video metadata: {e}")
+        logger.warning(f"Full metadata extraction failed: {e}")
+        # Try fallback method
+        return _get_metadata_fallback(video_id)
+
+
+def _get_metadata_fallback(video_id: str) -> Dict[str, Any]:
+    """
+    Fallback metadata extraction using BeautifulSoup (no JavaScript required).
+
+    Args:
+        video_id: YouTube video ID
+
+    Returns:
+        Dictionary with basic video metadata
+
+    Raises:
+        YouTubeToolsError: If fallback also fails
+    """
+    import requests
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        logger.error("BeautifulSoup4 not installed. Install with: pip install beautifulsoup4")
+        raise YouTubeToolsError("Metadata fallback requires beautifulsoup4")
+
+    try:
+        logger.info("Trying fallback metadata extraction...")
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        headers = {
+            'User-Agent': random.choice(USER_AGENTS),
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+
+        apply_request_delay()
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Extract from meta tags
+        title_tag = soup.find('meta', property='og:title')
+        title = title_tag['content'] if title_tag else 'Unknown'
+
+        duration_tag = soup.find('meta', itemprop='duration')
+        duration_str = duration_tag['content'] if duration_tag else 'PT0S'
+
+        # Convert PT format to seconds
+        duration_seconds = 0
+        match = re.search(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+        if match:
+            hours = int(match.group(1) or 0)
+            minutes = int(match.group(2) or 0)
+            seconds = int(match.group(3) or 0)
+            duration_seconds = hours * 3600 + minutes * 60 + seconds
+
+        logger.info("✅ Fallback metadata extraction successful")
+        return {
+            'video_id': video_id,
+            'url': f"https://www.youtube.com/watch?v={video_id}",
+            'title': title,
+            'channel': 'Unknown',
+            'duration_seconds': duration_seconds,
+            'thumbnail_url': f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
+            'upload_date': None,
+            'description': '',
+            'view_count': 0,
+            'like_count': 0,
+        }
+    except Exception as e:
+        logger.error(f"Metadata fallback failed: {e}")
+        raise YouTubeToolsError(
+            f"Failed to fetch metadata using both primary and fallback methods. "
+            f"YouTube may be blocking requests. Try again later. Error: {e}"
+        )
 
 
 def extract_captions(video_id: str, languages: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
@@ -233,19 +309,21 @@ def extract_captions(video_id: str, languages: Optional[List[str]] = None) -> Op
         return None
 
 
-def download_audio(url: str, output_dir: str = "./temp") -> str:
+def download_audio(url: str, output_dir: str = "./temp", use_cookies: bool = True, max_retries: int = 3) -> str:
     """
-    Download audio from YouTube video using yt-dlp.
+    Download audio from YouTube video using yt-dlp with retry logic.
 
     Args:
         url: YouTube URL or video ID
         output_dir: Directory to save audio file
+        use_cookies: Whether to try extracting cookies from browser (default: True)
+        max_retries: Maximum number of retry attempts (default: 3)
 
     Returns:
         Path to downloaded audio file
 
     Raises:
-        YouTubeToolsError: If download fails
+        YouTubeToolsError: If download fails after all retries
     """
     video_id = extract_video_id(url)
     full_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -260,52 +338,76 @@ def download_audio(url: str, output_dir: str = "./temp") -> str:
     # Get FFmpeg location (cross-platform compatible)
     ffmpeg_location = os.environ.get('FFMPEG_PATH', None)
 
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'wav',
-            'preferredquality': '192',
-        }],
-        'outtmpl': output_template,
-        'quiet': True,
-        'no_warnings': True,
-        'http_headers': get_headers(),
-        'socket_timeout': 30,
-        'retries': 5,  # Retry failed downloads up to 5 times
-        'fragment_retries': 5,
-        # Bot detection prevention
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['web', 'android'],
-                'skip': ['hls', 'dash'],
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Download attempt {attempt + 1}/{max_retries}")
+
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'wav',
+                    'preferredquality': '192',
+                }],
+                'outtmpl': output_template,
+                'quiet': True,
+                'no_warnings': True,
+                'http_headers': get_headers(),
+                'socket_timeout': 30,
+                'retries': 5,
+                'fragment_retries': 5,
             }
-        },
-    }
 
-    # Add FFmpeg location only if explicitly set
-    if ffmpeg_location:
-        ydl_opts['ffmpeg_location'] = ffmpeg_location
+            # Try Firefox cookies on first attempt
+            if use_cookies and attempt == 0:
+                try:
+                    ydl_opts['cookiesfrombrowser'] = ('firefox', None)
+                    logger.info("Using Firefox cookies for authentication")
+                except Exception as e:
+                    logger.debug(f"Firefox cookies unavailable: {e}")
 
-    try:
-        apply_request_delay()  # Add delay before download
+            # Add FFmpeg location only if explicitly set
+            if ffmpeg_location:
+                ydl_opts['ffmpeg_location'] = ffmpeg_location
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            logger.info(f"Downloading audio for video {video_id}")
-            ydl.download([full_url])
+            # Add delay on retries
+            if attempt > 0:
+                delay = 5 * attempt  # 5s, 10s, 15s...
+                logger.info(f"Waiting {delay}s before retry...")
+                time.sleep(delay)
+            else:
+                apply_request_delay()
 
-        # Find the downloaded file
-        audio_file = output_path / f"{video_id}.wav"
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([full_url])
 
-        if not audio_file.exists():
-            raise YouTubeToolsError(f"Audio file not found after download: {audio_file}")
+            # Find the downloaded file
+            audio_file = output_path / f"{video_id}.wav"
 
-        logger.info(f"Audio downloaded: {audio_file}")
-        return str(audio_file)
+            if not audio_file.exists():
+                raise YouTubeToolsError(f"Audio file not found after download: {audio_file}")
 
-    except Exception as e:
-        logger.error(f"Failed to download audio for {video_id}: {e}")
-        raise YouTubeToolsError(f"Failed to download audio: {e}")
+            logger.info(f"✅ Audio downloaded successfully")
+            return str(audio_file)
+
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Attempt {attempt + 1} failed: {str(e)[:150]}")
+
+            if attempt == max_retries - 1:
+                # Final attempt failed
+                logger.error(f"❌ Failed to download audio after {max_retries} attempts")
+                raise YouTubeToolsError(
+                    f"Failed to download audio after {max_retries} attempts. "
+                    f"YouTube may have updated bot detection. "
+                    f"Try manually uploading audio or waiting 24 hours. "
+                    f"Error: {last_error}"
+                )
+
+    # Should not reach here, but just in case
+    raise YouTubeToolsError(f"Audio download failed: {last_error}")
 
 
 def cleanup_audio_file(file_path: str) -> None:

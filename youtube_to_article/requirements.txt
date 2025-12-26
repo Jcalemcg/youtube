@@ -23,6 +23,7 @@ streamlit>=1.52.0
 # Utilities
 requests>=2.31.0
 tqdm>=4.66.0
+beautifulsoup4>=4.12.0  # For metadata fallback extraction
 
 # Optional: HTML rendering
 markdown>=3.5.0
