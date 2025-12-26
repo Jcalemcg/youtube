@@ -30,6 +30,9 @@ class PipelineConfig(BaseSettings):
     # Rate limiting for HF API
     requests_per_minute: int = 30
 
+    # FFmpeg configuration (optional, auto-detect if not set)
+    ffmpeg_path: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = False

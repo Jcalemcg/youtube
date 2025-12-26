@@ -1,9 +1,11 @@
 """YouTube video processing tools using yt-dlp and youtube-transcript-api."""
 import os
 import re
+import time
 import logging
 from typing import Optional, Dict, Any, List
 from pathlib import Path
+import random
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
@@ -16,10 +18,59 @@ from models.schemas import TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
+# User-Agent rotation pool - mimics real browser behavior
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+]
+
+# Request headers that mimic real browser behavior
+COMMON_HEADERS = {
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Cache-Control': 'max-age=0',
+}
+
+# Minimum and maximum delays between requests (in seconds)
+MIN_REQUEST_DELAY = 1
+MAX_REQUEST_DELAY = 3
+
 
 class YouTubeToolsError(Exception):
     """Base exception for YouTube tools."""
     pass
+
+
+def get_headers() -> Dict[str, str]:
+    """
+    Get randomized headers that mimic real browser behavior.
+
+    Returns:
+        Dictionary of HTTP headers
+    """
+    headers = COMMON_HEADERS.copy()
+    headers['User-Agent'] = random.choice(USER_AGENTS)
+    return headers
+
+
+def apply_request_delay():
+    """
+    Apply a random delay between requests to avoid bot detection.
+    Delays between MIN_REQUEST_DELAY and MAX_REQUEST_DELAY seconds.
+    """
+    delay = random.uniform(MIN_REQUEST_DELAY, MAX_REQUEST_DELAY)
+    time.sleep(delay)
+    logger.debug(f"Applied request delay: {delay:.2f}s")
 
 
 def extract_video_id(url: str) -> str:
@@ -79,9 +130,20 @@ def get_video_metadata(url: str) -> Dict[str, Any]:
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
+        'http_headers': get_headers(),
+        'socket_timeout': 30,
+        # Bot detection prevention settings
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['web', 'android'],  # Alternate between web and android clients
+                'skip': ['hls', 'dash'],  # Skip problematic formats
+            }
+        },
     }
 
     try:
+        apply_request_delay()  # Add delay before request
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(full_url, download=False)
 
@@ -126,9 +188,14 @@ def extract_captions(video_id: str, languages: Optional[List[str]] = None) -> Op
         languages = ['en']
 
     try:
+        apply_request_delay()  # Add delay before request
+
+        # Create custom headers for transcript API
+        headers = get_headers()
+
         # Try to get transcript directly using fetch method
         api = YouTubeTranscriptApi()
-        caption_data = api.fetch(video_id, languages=languages)
+        caption_data = api.fetch(video_id, languages=languages, http_client=None)
 
         # Convert to our format
         segments = []
@@ -143,6 +210,8 @@ def extract_captions(video_id: str, languages: Optional[List[str]] = None) -> Op
             )
             segments.append(segment)
             full_text_parts.append(entry['text'])
+
+        apply_request_delay()  # Add delay after successful request
 
         return {
             'segments': segments,
@@ -188,8 +257,8 @@ def download_audio(url: str, output_dir: str = "./temp") -> str:
     # Output template
     output_template = str(output_path / f"{video_id}.%(ext)s")
 
-    # FFmpeg location
-    ffmpeg_location = "C:/ffmpeg/ffmpeg-master-latest-win64-gpl/bin"
+    # Get FFmpeg location (cross-platform compatible)
+    ffmpeg_location = os.environ.get('FFMPEG_PATH', None)
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -201,10 +270,26 @@ def download_audio(url: str, output_dir: str = "./temp") -> str:
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
-        'ffmpeg_location': ffmpeg_location,
+        'http_headers': get_headers(),
+        'socket_timeout': 30,
+        'retries': 5,  # Retry failed downloads up to 5 times
+        'fragment_retries': 5,
+        # Bot detection prevention
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['web', 'android'],
+                'skip': ['hls', 'dash'],
+            }
+        },
     }
 
+    # Add FFmpeg location only if explicitly set
+    if ffmpeg_location:
+        ydl_opts['ffmpeg_location'] = ffmpeg_location
+
     try:
+        apply_request_delay()  # Add delay before download
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             logger.info(f"Downloading audio for video {video_id}")
             ydl.download([full_url])
