@@ -123,6 +123,8 @@ def init_session_state():
         st.session_state.article = None
     if 'seo' not in st.session_state:
         st.session_state.seo = None
+    if 'quality_assessment' not in st.session_state:
+        st.session_state.quality_assessment = None
     if 'youtube_url' not in st.session_state:
         st.session_state.youtube_url = ""
 
@@ -135,12 +137,13 @@ def reset_workflow():
     st.session_state.theme = None
     st.session_state.article = None
     st.session_state.seo = None
+    st.session_state.quality_assessment = None
     st.session_state.youtube_url = ""
 
 
 def show_progress():
     """Show progress indicator."""
-    stages = ["📝 Input", "🎤 Transcribe", "🔍 Analyze", "🎨 Theme", "✍️ Write", "🚀 SEO", "✅ Complete"]
+    stages = ["📝 Input", "🎤 Transcribe", "🔍 Analyze", "🎨 Theme", "✍️ Write", "🚀 SEO", "✅ QA", "📦 Complete"]
     current_stage = st.session_state.stage
 
     cols = st.columns(len(stages))
@@ -726,13 +729,204 @@ def stage5_seo():
             st.rerun()
 
     with col2:
-        if st.button("✓ Complete & Download →", type="primary"):
+        if st.button("✓ Assess Quality →", type="primary"):
             st.session_state.stage = 6
             st.rerun()
 
 
-def stage6_complete():
-    """Stage 6: Complete & Download"""
+def stage6_quality_assessment():
+    """Stage 6: Quality Assessment"""
+    st.title("✅ Stage 6: Quality Assessment")
+    show_progress()
+    st.markdown("---")
+
+    if st.session_state.quality_assessment is None:
+        # Create status containers
+        status_container = st.empty()
+        preview_container = st.empty()
+
+        try:
+            status_container.info("🔍 Analyzing article quality...")
+
+            # Run quality assessment
+            qa = st.session_state.pipeline.stage5_assess_quality(
+                st.session_state.article,
+                st.session_state.analysis,
+                st.session_state.seo
+            )
+
+            # Show success with quality rating
+            status_container.success(f"✓ Quality assessment complete: {qa.quality_rating.upper()} ({qa.overall_score:.1f}/100)")
+
+            # Show preview
+            with preview_container.container():
+                st.subheader("📊 Quality Overview:")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Overall Score", f"{qa.overall_score:.0f}/100")
+                with col2:
+                    st.metric("Content Quality", f"{qa.content_quality.average_score:.0f}/100")
+                with col3:
+                    st.metric("SEO Quality", f"{qa.seo_quality.average_score:.0f}/100")
+                with col4:
+                    st.metric("Structure", f"{qa.structure_check.passed_checks}/{qa.structure_check.total_checks}")
+
+            st.session_state.quality_assessment = qa
+
+            import time
+            time.sleep(1.5)  # Let user see the preview
+            st.rerun()
+
+        except Exception as e:
+            status_container.error(f"❌ Quality assessment failed: {e}")
+            logger.error(f"Quality assessment error: {e}", exc_info=True)
+            if st.button("← Back"):
+                st.session_state.stage = 5
+                st.rerun()
+            return
+
+    # Show quality assessment
+    qa = st.session_state.quality_assessment
+
+    st.success("✅ Quality assessment complete!")
+
+    st.markdown("---")
+
+    # Quality rating with color
+    rating_colors = {
+        "excellent": "#0F9D58",
+        "good": "#4285F4",
+        "fair": "#F9AB00",
+        "poor": "#EA4335"
+    }
+    rating_color = rating_colors.get(qa.quality_rating, "#909090")
+
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        st.markdown(f"""
+        <div style="background-color: {rating_color}; padding: 20px; border-radius: 8px; text-align: center;">
+            <h1 style="color: white; margin: 0;">{qa.overall_score:.1f}</h1>
+            <h3 style="color: white; margin: 5px 0 0 0;">Quality Score</h3>
+            <p style="color: white; font-size: 18px; margin: 10px 0 0 0; text-transform: uppercase;">{qa.quality_rating}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("#### 📊 Detailed Scores")
+        st.info(f"**Content Quality:** {qa.content_quality.average_score:.1f}/100")
+        st.info(f"**SEO Quality:** {qa.seo_quality.average_score:.1f}/100")
+        st.info(f"**Structure Check:** {qa.structure_check.passed_checks}/{qa.structure_check.total_checks} ✓")
+
+    st.markdown("---")
+
+    # Content Quality Breakdown
+    st.subheader("📝 Content Quality Breakdown")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Readability", f"{qa.content_quality.readability_score:.0f}", help="How easy the article is to read")
+        st.metric("Coherence", f"{qa.content_quality.coherence_score:.0f}", help="How well sections flow together")
+    with col2:
+        st.metric("Completeness", f"{qa.content_quality.completeness_score:.0f}", help="Coverage of topic")
+        st.metric("Relevance", f"{qa.content_quality.relevance_score:.0f}", help="Alignment with main topic")
+    with col3:
+        st.metric("Uniqueness", f"{qa.content_quality.uniqueness_score:.0f}", help="Originality of content")
+
+    st.markdown("---")
+
+    # SEO Quality Breakdown
+    st.subheader("🔍 SEO Quality Breakdown")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Keyword Optimization", f"{qa.seo_quality.keyword_optimization:.0f}")
+        st.metric("Meta Tag Quality", f"{qa.seo_quality.meta_tag_quality:.0f}")
+    with col2:
+        st.metric("Slug Quality", f"{qa.seo_quality.slug_quality:.0f}")
+        st.metric("Schema Markup", f"{qa.seo_quality.schema_markup_quality:.0f}")
+    with col3:
+        st.metric("Social Media", f"{qa.seo_quality.social_media_optimization:.0f}")
+
+    st.markdown("---")
+
+    # Structure Validation
+    st.subheader("🏗️ Structure Validation")
+    checks = [
+        ("Headline present", qa.structure_check.has_headline),
+        ("Introduction present", qa.structure_check.has_introduction),
+        ("Body sections present", qa.structure_check.has_sections),
+        ("Conclusion present", qa.structure_check.has_conclusion),
+        ("Minimum word count (200+)", qa.structure_check.min_word_count_met),
+        ("All sections have content", qa.structure_check.sections_have_content),
+        ("Proper Markdown formatting", qa.structure_check.proper_formatting)
+    ]
+
+    col1, col2 = st.columns(2)
+    for i, (check_name, passed) in enumerate(checks):
+        col = col1 if i % 2 == 0 else col2
+        with col:
+            if passed:
+                st.success(f"✓ {check_name}")
+            else:
+                st.error(f"✗ {check_name}")
+
+    st.markdown("---")
+
+    # Recommendations
+    if qa.recommendations:
+        st.subheader("💡 Improvement Recommendations")
+
+        # Group recommendations by severity
+        critical = [r for r in qa.recommendations if r.severity == "critical"]
+        warning = [r for r in qa.recommendations if r.severity == "warning"]
+        info = [r for r in qa.recommendations if r.severity == "info"]
+
+        if critical:
+            st.markdown("#### 🔴 Critical Issues")
+            for rec in critical:
+                with st.expander(f"⚠️ {rec.message}"):
+                    st.markdown(f"**Category:** {rec.category}")
+                    st.markdown(f"**Issue:** {rec.message}")
+                    if rec.action:
+                        st.markdown(f"**Recommended Action:** {rec.action}")
+
+        if warning:
+            st.markdown("#### 🟡 Warnings")
+            for rec in warning:
+                with st.expander(f"⚠️ {rec.message}"):
+                    st.markdown(f"**Category:** {rec.category}")
+                    st.markdown(f"**Issue:** {rec.message}")
+                    if rec.action:
+                        st.markdown(f"**Recommended Action:** {rec.action}")
+
+        if info:
+            st.markdown("#### ℹ️ Suggestions")
+            for rec in info:
+                with st.expander(f"💡 {rec.message}"):
+                    st.markdown(f"**Category:** {rec.category}")
+                    st.markdown(f"**Issue:** {rec.message}")
+                    if rec.action:
+                        st.markdown(f"**Recommended Action:** {rec.action}")
+    else:
+        st.success("🎉 No improvement recommendations - your article is excellent!")
+
+    st.markdown("---")
+
+    # Actions
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        if st.button("← Back"):
+            st.session_state.stage = 5
+            st.session_state.quality_assessment = None
+            st.rerun()
+
+    with col2:
+        if st.button("✓ Download Results →", type="primary"):
+            st.session_state.stage = 7
+            st.rerun()
+
+
+def stage7_complete():
+    """Stage 7: Complete & Download"""
     st.title("✅ Conversion Complete!")
     show_progress()
     st.markdown("---")
@@ -746,9 +940,22 @@ def stage6_complete():
     with col2:
         st.metric("Sections", len(st.session_state.article.sections))
     with col3:
-        st.metric("Keywords", len(st.session_state.seo.secondary_keywords) + 1)
+        st.metric("Quality Score", f"{st.session_state.quality_assessment.overall_score:.0f}/100" if st.session_state.quality_assessment else "N/A")
 
     st.markdown("---")
+
+    # Quality summary if available
+    if st.session_state.quality_assessment:
+        qa = st.session_state.quality_assessment
+        st.subheader("✅ Quality Assessment Summary")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Rating", qa.quality_rating.upper())
+        with col2:
+            st.metric("Content Quality", f"{qa.content_quality.average_score:.0f}/100")
+        with col3:
+            st.metric("SEO Quality", f"{qa.seo_quality.average_score:.0f}/100")
+        st.markdown("---")
 
     # Download options
     st.subheader("📥 Download Your Article")
@@ -769,7 +976,8 @@ def stage6_complete():
         final_output = {
             "article": st.session_state.article.model_dump(),
             "seo": st.session_state.seo.model_dump(),
-            "transcript": st.session_state.transcript.model_dump()
+            "transcript": st.session_state.transcript.model_dump(),
+            "quality_assessment": st.session_state.quality_assessment.model_dump() if st.session_state.quality_assessment else None
         }
         st.download_button(
             label="📦 Download Full Package (JSON)",
@@ -802,7 +1010,8 @@ def main():
             ("🎨 Theme", 3),
             ("✍️ Write", 4),
             ("🚀 SEO", 5),
-            ("✅ Complete", 6)
+            ("✅ QA", 6),
+            ("📦 Complete", 7)
         ]
 
         for name, stage_num in stages:
@@ -834,7 +1043,9 @@ def main():
     elif st.session_state.stage == 5:
         stage5_seo()
     elif st.session_state.stage == 6:
-        stage6_complete()
+        stage6_quality_assessment()
+    elif st.session_state.stage == 7:
+        stage7_complete()
 
 
 if __name__ == "__main__":

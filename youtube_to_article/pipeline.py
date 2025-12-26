@@ -8,6 +8,7 @@ from agents.transcriber import TranscriberAgent
 from agents.analyzer import AnalyzerAgent
 from agents.writer import WriterAgent
 from agents.seo_optimizer import SEOAgent
+from agents.quality_assurance import QualityAssuranceAgent
 from models.schemas import (
     TranscriptResult,
     ContentAnalysis,
@@ -15,7 +16,8 @@ from models.schemas import (
     Article,
     SEOPackage,
     VideoMetadata,
-    FinalOutput
+    FinalOutput,
+    QualityAssessment
 )
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ class YouTubeToArticlePipeline:
         self.analyzer = AnalyzerAgent(config)
         self.writer = WriterAgent(config)
         self.seo = SEOAgent(config)
+        self.qa = QualityAssuranceAgent()
 
         logger.info("Pipeline initialized successfully")
 
@@ -184,6 +187,34 @@ class YouTubeToArticlePipeline:
         logger.info(f"✓ Stage 4 complete: SEO package generated")
         return result
 
+    def stage5_assess_quality(
+        self,
+        article: Article,
+        analysis: ContentAnalysis,
+        seo: SEOPackage
+    ) -> QualityAssessment:
+        """
+        Stage 5: Assess article quality and provide recommendations.
+
+        Args:
+            article: Article from Stage 4
+            analysis: Analysis from Stage 2
+            seo: SEO package from Stage 4
+
+        Returns:
+            QualityAssessment
+        """
+        logger.info("=" * 60)
+        logger.info("STAGE 5: QUALITY ASSESSMENT")
+        logger.info("=" * 60)
+
+        result = self.qa.assess_quality(article, analysis, seo)
+
+        logger.info(f"✓ Stage 5 complete: Quality {result.quality_rating.upper()} ({result.overall_score:.1f}/100)")
+        if result.recommendations:
+            logger.info(f"  {len(result.recommendations)} recommendations generated")
+        return result
+
     # Full pipeline execution
 
     def process(
@@ -218,6 +249,9 @@ class YouTubeToArticlePipeline:
         # Stage 4: SEO Optimization
         seo_package = self.stage4_optimize_seo(article, analysis, transcript)
 
+        # Stage 5: Quality Assessment
+        quality_assessment = self.stage5_assess_quality(article, analysis, seo_package)
+
         # Build video metadata
         video_meta = VideoMetadata(
             video_id=transcript.video_id,
@@ -236,6 +270,7 @@ class YouTubeToArticlePipeline:
             analysis=analysis,
             article=article,
             seo=seo_package,
+            quality_assessment=quality_assessment,
             generated_at=datetime.now(),
             pipeline_version="1.0.0"
         )
@@ -246,6 +281,7 @@ class YouTubeToArticlePipeline:
         logger.info(f"✓ Analysis: {len(analysis.suggested_sections)} sections")
         logger.info(f"✓ Article: {article.word_count} words")
         logger.info(f"✓ SEO: Complete package")
+        logger.info(f"✓ Quality: {quality_assessment.quality_rating.upper()} ({quality_assessment.overall_score:.1f}/100)")
         logger.info("=" * 60 + "\n")
 
         return final_output
@@ -287,6 +323,12 @@ class YouTubeToArticlePipeline:
         seo_path = video_dir / "seo.json"
         with open(seo_path, 'w', encoding='utf-8') as f:
             json.dump(output.seo.model_dump(), f, indent=2, default=str)
+
+        # Save quality assessment
+        if output.quality_assessment:
+            qa_path = video_dir / "quality_assessment.json"
+            with open(qa_path, 'w', encoding='utf-8') as f:
+                json.dump(output.quality_assessment.model_dump(), f, indent=2, default=str)
 
         logger.info(f"Output saved to: {video_dir}")
 
