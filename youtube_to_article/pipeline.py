@@ -11,6 +11,7 @@ from agents.seo_optimizer import SEOAgent
 from models.schemas import (
     TranscriptResult,
     ContentAnalysis,
+    ArticleTheme,
     Article,
     SEOPackage,
     VideoMetadata,
@@ -101,7 +102,7 @@ class YouTubeToArticlePipeline:
         analysis: ContentAnalysis
     ) -> Article:
         """
-        Stage 3: Generate article.
+        Stage 3: Generate article (legacy method without theme).
 
         Args:
             transcript: Transcript from Stage 1
@@ -114,9 +115,36 @@ class YouTubeToArticlePipeline:
         logger.info("STAGE 3: ARTICLE GENERATION")
         logger.info("=" * 60)
 
-        result = self.writer.run(transcript, analysis)
+        result = self.writer.run(transcript, analysis, theme=None)
 
         logger.info(f"✓ Stage 3 complete: {result.word_count} words written")
+        return result
+
+    def stage4_write(
+        self,
+        transcript: TranscriptResult,
+        analysis: ContentAnalysis,
+        theme: ArticleTheme
+    ) -> Article:
+        """
+        Stage 4: Generate article with theme selection.
+
+        Args:
+            transcript: Transcript from Stage 1
+            analysis: Analysis from Stage 2
+            theme: Article theme and style preferences from Stage 2.5
+
+        Returns:
+            Article
+        """
+        logger.info("=" * 60)
+        logger.info("STAGE 4: ARTICLE GENERATION (WITH THEME)")
+        logger.info("=" * 60)
+        logger.info(f"Theme: {theme.theme_style}, Audience: {theme.target_audience}, Length: {theme.article_length}")
+
+        result = self.writer.run(transcript, analysis, theme=theme)
+
+        logger.info(f"✓ Stage 4 complete: {result.word_count} words written")
         return result
 
     def stage4_optimize_seo(
