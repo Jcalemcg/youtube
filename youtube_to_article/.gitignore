@@ -1,0 +1,33 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+
+# Output directories
+output/
+*.json
+*.md
+
+# Cache
+cache/
+.cache
+
+# OS
+.DS_Store
+Thumbs.db
