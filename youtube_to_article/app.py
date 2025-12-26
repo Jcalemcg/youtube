@@ -297,6 +297,29 @@ def stage1_transcribe():
 
     st.markdown("---")
 
+    # Edit Transcript
+    with st.expander("✏️ Edit Transcript"):
+        st.markdown("**Customize the transcript before continuing:**")
+
+        edited_transcript = st.text_area(
+            "Edit Full Transcript",
+            transcript.transcript,
+            height=300,
+            key="edit_transcript_text"
+        )
+
+        if edited_transcript != transcript.transcript:
+            if st.button("💾 Save Transcript Changes"):
+                # Update the transcript in session state
+                st.session_state.transcript.transcript = edited_transcript
+                st.success("✓ Transcript updated!")
+                st.info("The edited transcript will be used for analysis in the next stage.")
+                import time
+                time.sleep(1)
+                st.rerun()
+
+    st.markdown("---")
+
     # Actions
     col1, col2, col3 = st.columns([1, 1, 2])
 
@@ -549,6 +572,71 @@ def stage3_analyze():
 
     st.markdown("---")
 
+    # Edit Analysis
+    with st.expander("✏️ Edit Analysis"):
+        st.markdown("**Customize the content analysis:**")
+
+        col1, col2 = st.columns([1, 1])
+
+        # Edit main topic
+        with col1:
+            st.markdown("##### Main Topic")
+            edited_main_topic = st.text_area(
+                "Edit main topic",
+                analysis.main_topic,
+                height=80,
+                key="edit_main_topic"
+            )
+            if edited_main_topic != analysis.main_topic:
+                st.session_state.analysis.main_topic = edited_main_topic
+
+        # Edit subtopics
+        with col2:
+            st.markdown("##### Key Subtopics")
+            subtopics_text = "\n".join(analysis.subtopics)
+            edited_subtopics_text = st.text_area(
+                "Edit subtopics (one per line)",
+                subtopics_text,
+                height=80,
+                key="edit_subtopics"
+            )
+            if edited_subtopics_text != subtopics_text:
+                edited_subtopics = [s.strip() for s in edited_subtopics_text.split("\n") if s.strip()]
+                st.session_state.analysis.subtopics = edited_subtopics
+
+        # Edit suggested sections
+        st.markdown("##### Suggested Article Sections")
+        for i, section in enumerate(analysis.suggested_sections):
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                edited_title = st.text_input(
+                    f"Section {i+1} title",
+                    section.title,
+                    key=f"edit_section_title_{i}"
+                )
+                if edited_title != section.title:
+                    st.session_state.analysis.suggested_sections[i].title = edited_title
+
+            with col2:
+                edited_desc = st.text_area(
+                    f"Section {i+1} description",
+                    section.description,
+                    height=60,
+                    key=f"edit_section_desc_{i}"
+                )
+                if edited_desc != section.description:
+                    st.session_state.analysis.suggested_sections[i].description = edited_desc
+
+        # Save changes
+        if st.button("💾 Save Analysis Changes"):
+            st.success("✓ Analysis updated!")
+            st.info("The edited analysis will be used for article generation in the next stage.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
+    st.markdown("---")
+
     # Actions
     col1, col2 = st.columns([1, 1])
 
@@ -692,9 +780,9 @@ def stage4_select_theme():
             st.rerun()
 
 
-def stage4_write():
-    """Stage 4: Article Generation"""
-    st.title("✍️ Stage 4: Article Generation")
+def stage5_write():
+    """Stage 5: Article Generation"""
+    st.title("✍️ Stage 5: Article Generation")
     show_progress()
     st.markdown("---")
 
@@ -785,6 +873,87 @@ def stage4_write():
 
     st.markdown("---")
 
+    # Edit Article
+    with st.expander("✏️ Edit Article Content"):
+        st.markdown("**Customize your article:**")
+
+        # Edit headline
+        st.markdown("##### Headline")
+        edited_headline = st.text_input(
+            "Edit headline",
+            article.headline,
+            key="edit_headline"
+        )
+        if edited_headline != article.headline:
+            st.session_state.article.headline = edited_headline
+
+        # Edit introduction
+        st.markdown("##### Introduction")
+        edited_intro = st.text_area(
+            "Edit introduction",
+            article.introduction,
+            height=120,
+            key="edit_introduction"
+        )
+        if edited_intro != article.introduction:
+            st.session_state.article.introduction = edited_intro
+
+        # Edit sections
+        st.markdown("##### Article Sections")
+        for i, section in enumerate(article.sections):
+            st.markdown(f"**Section {i+1}: {section.heading}**")
+            edited_heading = st.text_input(
+                f"Section {i+1} heading",
+                section.heading,
+                key=f"edit_heading_{i}"
+            )
+            if edited_heading != section.heading:
+                st.session_state.article.sections[i].heading = edited_heading
+
+            edited_content = st.text_area(
+                f"Section {i+1} content",
+                section.content,
+                height=150,
+                key=f"edit_content_{i}"
+            )
+            if edited_content != section.content:
+                st.session_state.article.sections[i].content = edited_content
+
+        # Edit conclusion
+        if article.conclusion:
+            st.markdown("##### Conclusion")
+            edited_conclusion = st.text_area(
+                "Edit conclusion",
+                article.conclusion,
+                height=120,
+                key="edit_conclusion"
+            )
+            if edited_conclusion != article.conclusion:
+                st.session_state.article.conclusion = edited_conclusion
+
+        # Save changes
+        if st.button("💾 Save Article Changes"):
+            # Recalculate word count from updated sections
+            from models.schemas import Article
+            new_markdown = f"# {st.session_state.article.headline}\n\n"
+            new_markdown += st.session_state.article.introduction + "\n\n"
+            for section in st.session_state.article.sections:
+                new_markdown += f"## {section.heading}\n\n{section.content}\n\n"
+            if st.session_state.article.conclusion:
+                new_markdown += f"## Conclusion\n\n{st.session_state.article.conclusion}\n\n"
+
+            word_count = len(new_markdown.split())
+            st.session_state.article.markdown = new_markdown
+            st.session_state.article.word_count = word_count
+
+            st.success("✓ Article updated!")
+            st.info("The edited article will be used for SEO optimization in the next stage.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
+    st.markdown("---")
+
     # Actions
     col1, col2 = st.columns([1, 1])
 
@@ -800,9 +969,9 @@ def stage4_write():
             st.rerun()
 
 
-def stage5_seo():
-    """Stage 5: SEO Optimization"""
-    st.title("🚀 Stage 5: SEO Optimization")
+def stage6_seo():
+    """Stage 6: SEO Optimization"""
+    st.title("🚀 Stage 6: SEO Optimization")
     show_progress()
     st.markdown("---")
 
@@ -877,6 +1046,97 @@ def stage5_seo():
 
     st.markdown("---")
 
+    # Edit SEO
+    with st.expander("✏️ Edit SEO Package"):
+        st.markdown("**Customize your SEO optimization:**")
+
+        col1, col2 = st.columns([1, 1])
+
+        # Edit meta tags
+        with col1:
+            st.markdown("##### Meta Tags")
+            edited_meta_title = st.text_input(
+                "Edit meta title",
+                seo.meta_title,
+                max_chars=60,
+                key="edit_meta_title"
+            )
+            if edited_meta_title != seo.meta_title:
+                st.session_state.seo.meta_title = edited_meta_title
+
+            edited_meta_desc = st.text_area(
+                "Edit meta description",
+                seo.meta_description,
+                height=80,
+                key="edit_meta_desc"
+            )
+            if edited_meta_desc != seo.meta_description:
+                st.session_state.seo.meta_description = edited_meta_desc
+
+            edited_slug = st.text_input(
+                "Edit URL slug",
+                seo.slug,
+                key="edit_slug"
+            )
+            if edited_slug != seo.slug:
+                st.session_state.seo.slug = edited_slug
+
+        # Edit keywords
+        with col2:
+            st.markdown("##### Keywords")
+            edited_primary_keyword = st.text_input(
+                "Edit primary keyword",
+                seo.primary_keyword,
+                key="edit_primary_keyword"
+            )
+            if edited_primary_keyword != seo.primary_keyword:
+                st.session_state.seo.primary_keyword = edited_primary_keyword
+
+            secondary_keywords_text = ", ".join(seo.secondary_keywords)
+            edited_secondary_text = st.text_area(
+                "Edit secondary keywords (comma-separated)",
+                secondary_keywords_text,
+                height=80,
+                key="edit_secondary_keywords"
+            )
+            if edited_secondary_text != secondary_keywords_text:
+                edited_secondary = [k.strip() for k in edited_secondary_text.split(",") if k.strip()]
+                st.session_state.seo.secondary_keywords = edited_secondary
+
+        # Edit social posts
+        st.markdown("##### Social Media Posts")
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            edited_twitter = st.text_area(
+                "Edit Twitter/X post",
+                seo.social_posts.twitter,
+                height=80,
+                key="edit_twitter_post"
+            )
+            if edited_twitter != seo.social_posts.twitter:
+                st.session_state.seo.social_posts.twitter = edited_twitter
+
+        with col2:
+            edited_linkedin = st.text_area(
+                "Edit LinkedIn post",
+                seo.social_posts.linkedin,
+                height=80,
+                key="edit_linkedin_post"
+            )
+            if edited_linkedin != seo.social_posts.linkedin:
+                st.session_state.seo.social_posts.linkedin = edited_linkedin
+
+        # Save changes
+        if st.button("💾 Save SEO Changes"):
+            st.success("✓ SEO package updated!")
+            st.info("The edited SEO data will be included in your final output.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
+    st.markdown("---")
+
     # Actions
     col1, col2 = st.columns([1, 1])
 
@@ -892,9 +1152,9 @@ def stage5_seo():
             st.rerun()
 
 
-def stage6_quality_assessment():
-    """Stage 6: Quality Assessment"""
-    st.title("✅ Stage 6: Quality Assessment")
+def stage7_quality_assessment():
+    """Stage 7: Quality Assessment"""
+    st.title("✅ Stage 7: Quality Assessment")
     show_progress()
     st.markdown("---")
 
@@ -1083,8 +1343,8 @@ def stage6_quality_assessment():
             st.rerun()
 
 
-def stage7_complete():
-    """Stage 7: Complete & Download"""
+def stage8_complete():
+    """Stage 8: Complete & Download"""
     st.title("✅ Conversion Complete!")
     show_progress()
     st.markdown("---")
