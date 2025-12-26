@@ -9,6 +9,7 @@ from models.schemas import (
     ContentAnalysis,
     ContentQualityScore,
     SEOQualityScore,
+    ContentPolicyScore,
     StructureCheck,
     QualityAssessment,
     QualityRecommendation,
@@ -403,6 +404,148 @@ class QualityAssuranceAgent:
         return min(100, score)
 
     # ========================================================================
+    # Policy Compliance Scoring
+    # ========================================================================
+
+    def score_policy_compliance(
+        self,
+        article: Article,
+        analysis: ContentAnalysis,
+    ) -> ContentPolicyScore:
+        """
+        Score content for policy compliance and quality.
+        Note: This is a basic algorithmic check; for production use,
+        integrate with the ContentFilterAgent for comprehensive filtering.
+        """
+        article_text = (
+            article.headline + ' ' +
+            article.introduction + ' ' +
+            ' '.join(s.content for s in article.sections) + ' ' +
+            article.conclusion
+        ).lower()
+
+        # Initialize all scores to 100 (compliant by default)
+        profanity_score = self._check_profanity_free(article_text)
+        violence_score = self._check_violence_free(article_text)
+        harassment_score = self._check_harassment_free(article_text)
+        hate_speech_score = self._check_hate_speech_free(article_text)
+
+        # Promotional and sponsor checks (based on analysis flags)
+        promotional_score = self._score_promotional_content(analysis)
+        sponsor_score = self._score_sponsor_transparency(analysis)
+
+        # Misinformation check
+        misinformation_score = self._check_misinformation_free(article_text)
+
+        # Calculate overall compliance
+        all_scores = [
+            profanity_score,
+            violence_score,
+            harassment_score,
+            hate_speech_score,
+            promotional_score,
+            sponsor_score,
+            misinformation_score,
+        ]
+        overall_compliance = sum(all_scores) / len(all_scores)
+
+        # Determine policy rating
+        if overall_compliance >= 95:
+            rating = "compliant"
+        elif overall_compliance >= 80:
+            rating = "warning"
+        elif overall_compliance >= 50:
+            rating = "flagged"
+        else:
+            rating = "blocked"
+
+        return ContentPolicyScore(
+            profanity_free_score=profanity_score,
+            violence_free_score=violence_score,
+            harassment_free_score=harassment_score,
+            hate_speech_free_score=hate_speech_score,
+            promotional_content_score=promotional_score,
+            sponsor_transparency_score=sponsor_score,
+            misinformation_free_score=misinformation_score,
+            overall_policy_compliance=overall_compliance,
+            policy_rating=rating,  # type: ignore
+        )
+
+    def _check_profanity_free(self, text: str) -> float:
+        """Check for profanity in text (0-100 score)."""
+        # Simple profanity patterns
+        patterns = [
+            r'\b(?:f[u\*]ck|shit|ass(?:hole)?|damn|crap)\b',
+            r'\b(?:bitch|bastard|arsehole)\b',
+        ]
+        for pattern in patterns:
+            if re.search(pattern, text):
+                return 70.0  # Found profanity, reduce score
+        return 100.0
+
+    def _check_violence_free(self, text: str) -> float:
+        """Check for violence references (0-100 score)."""
+        patterns = [
+            r'\b(?:kill|murder|assault|attack|stabbing|shooting)\b',
+            r'graphic(?:ally)? (?:violent|graphic)',
+        ]
+        for pattern in patterns:
+            if re.search(pattern, text):
+                return 75.0
+        return 100.0
+
+    def _check_harassment_free(self, text: str) -> float:
+        """Check for harassment language (0-100 score)."""
+        patterns = [
+            r'should (?:die|be killed|burn|hang)',
+            r'\b(?:hate|loser|dumb|stupid)\s+(?:all\s+)?(?:people|them)',
+        ]
+        for pattern in patterns:
+            if re.search(pattern, text):
+                return 70.0
+        return 100.0
+
+    def _check_hate_speech_free(self, text: str) -> float:
+        """Check for hate speech (0-100 score)."""
+        # This is a basic check; real hate speech detection requires ML models
+        # For now, we rely on basic patterns
+        patterns = [
+            r'\[hate speech patterns would go here\]',  # Placeholder for sensitive patterns
+        ]
+        return 100.0
+
+    def _score_promotional_content(self, analysis: ContentAnalysis) -> float:
+        """Score how well promotional content is handled."""
+        # Check if there are promotional flags in content_flags
+        promotional_flags = [f for f in analysis.content_flags if 'promotional' in f.lower()]
+        if promotional_flags:
+            # Content has promotional elements but they should be disclosed
+            return 80.0
+        return 100.0
+
+    def _score_sponsor_transparency(self, analysis: ContentAnalysis) -> float:
+        """Score sponsor disclosure transparency."""
+        # Check if sponsor flags are present
+        sponsor_flags = [f for f in analysis.content_flags if 'sponsor' in f.lower()]
+        if sponsor_flags:
+            # Sponsors mentioned but check if disclosed
+            # In real implementation, check for disclosure statements
+            return 85.0
+        return 100.0
+
+    def _check_misinformation_free(self, text: str) -> float:
+        """Check for misinformation indicators (0-100 score)."""
+        patterns = [
+            r'miracle (?:cure|solution)',
+            r'(?:guaranteed|proven) to cure',
+            r'this one weird trick',
+        ]
+        for pattern in patterns:
+            if re.search(pattern, text):
+                return 75.0
+        return 100.0
+
+    # ========================================================================
     # Recommendations Generation
     # ========================================================================
 
@@ -563,11 +706,21 @@ class QualityAssuranceAgent:
         # Score SEO quality
         seo_quality = self.score_seo_quality(seo, article)
 
+        # Score policy compliance
+        policy_compliance = self.score_policy_compliance(article, analysis)
+
         # Calculate overall score (weighted average)
+        # Reduce overall score if policy compliance is low
+        policy_weight = 0.1
+        content_weight = 0.5 - (policy_weight / 2)
+        seo_weight = 0.3 - (policy_weight / 2)
+        structure_weight = 0.2
+
         overall_score = (
-            content_quality.average_score * 0.5 +
-            seo_quality.average_score * 0.3 +
-            (structure.passed_checks / structure.total_checks * 100) * 0.2
+            content_quality.average_score * content_weight +
+            seo_quality.average_score * seo_weight +
+            (structure.passed_checks / structure.total_checks * 100) * structure_weight +
+            policy_compliance.overall_policy_compliance * policy_weight
         )
 
         # Determine quality rating
@@ -585,14 +738,25 @@ class QualityAssuranceAgent:
             structure, content_quality, seo_quality, article
         )
 
+        # Add policy compliance recommendations if needed
+        if policy_compliance.policy_rating != "compliant":
+            recommendations.append(QualityRecommendation(
+                category="content",
+                severity="warning" if policy_compliance.policy_rating == "warning" else "critical",
+                message=f"Policy compliance rating: {policy_compliance.policy_rating.upper()}",
+                action="Review content for policy violations and adjust as necessary"
+            ))
+
         assessment = QualityAssessment(
             content_quality=content_quality,
             seo_quality=seo_quality,
             structure_check=structure,
+            policy_compliance=policy_compliance,
             overall_score=overall_score,
             quality_rating=rating,
             recommendations=recommendations,
         )
 
         logger.info(f"Quality assessment complete: {rating.upper()} ({overall_score:.1f}/100)")
+        logger.info(f"Policy compliance: {policy_compliance.policy_rating.upper()} ({policy_compliance.overall_policy_compliance:.1f}/100)")
         return assessment

@@ -110,11 +110,13 @@ st.markdown(f"""
 def init_session_state():
     """Initialize session state variables."""
     if 'stage' not in st.session_state:
-        st.session_state.stage = 0  # 0=input, 1=transcribe, 2=analyze, 3=theme, 4=write, 5=seo, 6=complete
+        st.session_state.stage = 0  # 0=input, 1=transcribe, 2=filter, 3=analyze, 4=theme, 5=write, 6=seo, 7=qa, 8=complete
     if 'pipeline' not in st.session_state:
         st.session_state.pipeline = None
     if 'transcript' not in st.session_state:
         st.session_state.transcript = None
+    if 'content_filter' not in st.session_state:
+        st.session_state.content_filter = None
     if 'analysis' not in st.session_state:
         st.session_state.analysis = None
     if 'theme' not in st.session_state:
@@ -133,6 +135,7 @@ def reset_workflow():
     """Reset workflow to start."""
     st.session_state.stage = 0
     st.session_state.transcript = None
+    st.session_state.content_filter = None
     st.session_state.analysis = None
     st.session_state.theme = None
     st.session_state.article = None
@@ -143,7 +146,7 @@ def reset_workflow():
 
 def show_progress():
     """Show progress indicator."""
-    stages = ["📝 Input", "🎤 Transcribe", "🔍 Analyze", "🎨 Theme", "✍️ Write", "🚀 SEO", "✅ QA", "📦 Complete"]
+    stages = ["📝 Input", "🎤 Transcribe", "🔒 Filter", "🔍 Analyze", "🎨 Theme", "✍️ Write", "🚀 SEO", "✅ QA", "📦 Complete"]
     current_stage = st.session_state.stage
 
     cols = st.columns(len(stages))
@@ -308,9 +311,164 @@ def stage1_transcribe():
             st.rerun()
 
 
-def stage2_analyze():
-    """Stage 2: Content Analysis"""
-    st.title("🔍 Stage 2: Content Analysis")
+def stage2_filter():
+    """Stage 2: Content Filtering & Policy Compliance"""
+    st.title("🔒 Stage 2: Content Filtering & Policy Compliance")
+    show_progress()
+    st.markdown("---")
+
+    if st.session_state.content_filter is None:
+        # Create status containers
+        status_container = st.empty()
+        results_container = st.empty()
+
+        try:
+            status_container.info("🔍 Running content policy checks...")
+
+            # Run content filtering
+            content_filter = st.session_state.pipeline.stage1_5_filter(st.session_state.transcript)
+
+            # Show success
+            status_container.success(f"✓ Content filtering complete!")
+            st.session_state.content_filter = content_filter
+
+            import time
+            time.sleep(1)
+            st.rerun()
+
+        except Exception as e:
+            status_container.error(f"❌ Content filtering failed: {e}")
+            logger.error(f"Content filtering error: {e}", exc_info=True)
+            if st.button("← Back"):
+                st.session_state.stage = 1
+                st.session_state.transcript = None
+                st.rerun()
+            return
+
+    # Show filtering results
+    content_filter = st.session_state.content_filter
+
+    # Overall compliance status
+    compliance_colors = {
+        "compliant": "#0F9D58",
+        "warning": "#FBBC04",
+        "flagged": "#EA4335",
+        "blocked": "#D32F2F"
+    }
+    color = compliance_colors.get(content_filter.overall_compliance, "#909090")
+
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        st.markdown(f"""
+        <div style="background-color: {color}; padding: 20px; border-radius: 8px; text-align: center;">
+            <h2 style="color: white; margin: 0;">Policy Check</h2>
+            <h1 style="color: white; margin: 10px 0 0 0;">{content_filter.overall_compliance.upper()}</h1>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("#### 📊 Content Metrics")
+        st.info(f"**Promotional Score:** {content_filter.promotional_score:.1%}")
+        st.info(f"**Sponsor Mentions:** {len(content_filter.sponsor_mentions)}")
+        st.info(f"**Policy Flags:** {len(content_filter.flags)}")
+
+    st.markdown("---")
+
+    # Summary
+    st.subheader("📋 Filtering Summary")
+    st.write(content_filter.summary)
+
+    st.markdown("---")
+
+    # Sponsor and promotional info
+    if content_filter.is_sponsor_content:
+        st.warning("⚠️ **Sponsored Content Detected**")
+        st.markdown(f"Mentions: {', '.join(content_filter.sponsor_mentions)}")
+        st.info("💡 Ensure sponsor relationships are clearly disclosed in the article.")
+
+    if content_filter.promotional_score > 0.5:
+        st.warning("⚠️ **High Promotional Content**")
+        st.info(f"This content appears to be {content_filter.promotional_score:.0%} promotional. Consider adjusting article tone to be more editorial.")
+
+    # Display detected flags
+    if content_filter.flags:
+        st.markdown("---")
+        st.subheader("🚩 Detected Issues")
+
+        # Group by severity
+        by_severity = {}
+        for flag in content_filter.flags:
+            if flag.severity not in by_severity:
+                by_severity[flag.severity] = []
+            by_severity[flag.severity].append(flag)
+
+        # Critical issues
+        if "critical" in by_severity:
+            st.markdown("#### 🔴 Critical Issues")
+            for flag in by_severity["critical"]:
+                with st.expander(f"⚠️ {flag.category.upper()}: {flag.message}"):
+                    st.markdown(f"**Text:** *{flag.text}*")
+                    st.markdown(f"**Position:** {flag.position or 'N/A'}")
+                    st.markdown(f"**Confidence:** {flag.confidence:.0%}")
+
+        # High issues
+        if "high" in by_severity:
+            st.markdown("#### 🟠 High Priority Issues")
+            for flag in by_severity["high"]:
+                with st.expander(f"⚠️ {flag.category.upper()}: {flag.message}"):
+                    st.markdown(f"**Text:** *{flag.text}*")
+                    st.markdown(f"**Position:** {flag.position or 'N/A'}")
+                    st.markdown(f"**Confidence:** {flag.confidence:.0%}")
+
+        # Medium and low
+        if "medium" in by_severity or "low" in by_severity:
+            st.markdown("#### ℹ️ Other Items")
+            for severity in ["medium", "low"]:
+                if severity in by_severity:
+                    for flag in by_severity[severity]:
+                        with st.expander(f"ℹ️ {flag.category.upper()}: {flag.message}"):
+                            st.markdown(f"**Text:** *{flag.text}*")
+                            st.markdown(f"**Confidence:** {flag.confidence:.0%}")
+
+    if content_filter.quality_issues:
+        st.markdown("---")
+        st.markdown("#### 🔍 Quality Issues")
+        for issue in content_filter.quality_issues:
+            st.warning(f"• {issue}")
+
+    st.markdown("---")
+
+    # Actions - handle based on compliance status
+    col1, col2, col3 = st.columns([1, 1, 2])
+
+    with col1:
+        if st.button("← Back"):
+            st.session_state.stage = 1
+            st.session_state.transcript = None
+            st.session_state.content_filter = None
+            st.rerun()
+
+    # Proceed button based on compliance
+    if content_filter.overall_compliance == "blocked":
+        with col3:
+            st.error("❌ Content is blocked. Review critical issues above. This content cannot be converted due to policy violations.")
+    else:
+        with col2:
+            if st.button("✓ Approve & Continue →", type="primary"):
+                st.session_state.stage = 3
+                st.rerun()
+        with col3:
+            if content_filter.overall_compliance in ["flagged", "warning"]:
+                with st.expander("⚠️ Override & Continue Anyway"):
+                    st.warning("You are proceeding with flagged content. Ensure any necessary adjustments are made.")
+                    if st.button("⚠️ Continue with Review →"):
+                        st.session_state.stage = 3
+                        st.rerun()
+
+
+def stage3_analyze():
+    """Stage 3: Content Analysis"""
+    st.title("🔍 Stage 3: Content Analysis")
     show_progress()
     st.markdown("---")
 
@@ -348,7 +506,7 @@ def stage2_analyze():
             status_container.error(f"❌ Analysis failed: {e}")
             logger.error(f"Analysis error: {e}", exc_info=True)
             if st.button("← Back"):
-                st.session_state.stage = 1
+                st.session_state.stage = 2
                 st.rerun()
             return
 
@@ -396,19 +554,19 @@ def stage2_analyze():
 
     with col1:
         if st.button("← Back"):
-            st.session_state.stage = 1
+            st.session_state.stage = 2
             st.session_state.analysis = None
             st.rerun()
 
     with col2:
         if st.button("✓ Approve & Select Theme →", type="primary"):
-            st.session_state.stage = 3
+            st.session_state.stage = 4
             st.rerun()
 
 
-def stage3_select_theme():
-    """Stage 3: Article Theme Selection"""
-    st.title("🎨 Stage 3: Select Article Theme")
+def stage4_select_theme():
+    """Stage 4: Article Theme Selection"""
+    st.title("🎨 Stage 4: Select Article Theme")
     show_progress()
     st.markdown("---")
 
@@ -1006,12 +1164,13 @@ def main():
         stages = [
             ("📝 Input", 0),
             ("🎤 Transcribe", 1),
-            ("🔍 Analyze", 2),
-            ("🎨 Theme", 3),
-            ("✍️ Write", 4),
-            ("🚀 SEO", 5),
-            ("✅ QA", 6),
-            ("📦 Complete", 7)
+            ("🔒 Filter", 2),
+            ("🔍 Analyze", 3),
+            ("🎨 Theme", 4),
+            ("✍️ Write", 5),
+            ("🚀 SEO", 6),
+            ("✅ QA", 7),
+            ("📦 Complete", 8)
         ]
 
         for name, stage_num in stages:
@@ -1035,17 +1194,19 @@ def main():
     elif st.session_state.stage == 1:
         stage1_transcribe()
     elif st.session_state.stage == 2:
-        stage2_analyze()
+        stage2_filter()
     elif st.session_state.stage == 3:
-        stage3_select_theme()
+        stage3_analyze()
     elif st.session_state.stage == 4:
-        stage4_write()
+        stage4_select_theme()
     elif st.session_state.stage == 5:
-        stage5_seo()
+        stage5_write()
     elif st.session_state.stage == 6:
-        stage6_quality_assessment()
+        stage6_seo()
     elif st.session_state.stage == 7:
-        stage7_complete()
+        stage7_quality_assessment()
+    elif st.session_state.stage == 8:
+        stage8_complete()
 
 
 if __name__ == "__main__":

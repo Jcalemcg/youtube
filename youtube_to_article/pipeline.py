@@ -9,6 +9,7 @@ from agents.analyzer import AnalyzerAgent
 from agents.writer import WriterAgent
 from agents.seo_optimizer import SEOAgent
 from agents.quality_assurance import QualityAssuranceAgent
+from agents.content_filter import ContentFilterAgent
 from models.schemas import (
     TranscriptResult,
     ContentAnalysis,
@@ -17,7 +18,8 @@ from models.schemas import (
     SEOPackage,
     VideoMetadata,
     FinalOutput,
-    QualityAssessment
+    QualityAssessment,
+    ContentFilterResult
 )
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,7 @@ class YouTubeToArticlePipeline:
         # Initialize agents
         logger.info("Initializing pipeline agents...")
         self.transcriber = TranscriberAgent(config)
+        self.content_filter = ContentFilterAgent()
         self.analyzer = AnalyzerAgent(config)
         self.writer = WriterAgent(config)
         self.seo = SEOAgent(config)
@@ -78,6 +81,28 @@ class YouTubeToArticlePipeline:
         result = self.transcriber.run(youtube_url, force_whisper=force_whisper)
 
         logger.info(f"✓ Stage 1 complete: {len(result.segments)} segments transcribed")
+        return result
+
+    def stage1_5_filter(self, transcript: TranscriptResult) -> ContentFilterResult:
+        """
+        Stage 1.5: Filter content for policy compliance and quality issues.
+
+        Args:
+            transcript: Transcript from Stage 1
+
+        Returns:
+            ContentFilterResult
+        """
+        logger.info("=" * 60)
+        logger.info("STAGE 1.5: CONTENT FILTERING")
+        logger.info("=" * 60)
+
+        result = self.content_filter.filter_transcript(transcript)
+
+        logger.info(f"✓ Stage 1.5 complete: Compliance status '{result.overall_compliance}'")
+        if result.flags:
+            logger.info(f"  {len(result.flags)} issue(s) detected")
+        logger.info(f"  Promotional score: {result.promotional_score:.1%}")
         return result
 
     def stage2_analyze(self, transcript: TranscriptResult) -> ContentAnalysis:
@@ -240,6 +265,9 @@ class YouTubeToArticlePipeline:
         # Stage 1: Transcription
         transcript = self.stage1_transcribe(youtube_url, force_whisper)
 
+        # Stage 1.5: Content Filtering
+        content_filter_result = self.stage1_5_filter(transcript)
+
         # Stage 2: Analysis
         analysis = self.stage2_analyze(transcript)
 
@@ -267,6 +295,7 @@ class YouTubeToArticlePipeline:
         final_output = FinalOutput(
             source_video=video_meta,
             transcript=transcript,
+            content_filter=content_filter_result,
             analysis=analysis,
             article=article,
             seo=seo_package,
@@ -278,6 +307,7 @@ class YouTubeToArticlePipeline:
         logger.info("\n" + "=" * 60)
         logger.info("PIPELINE COMPLETE")
         logger.info(f"✓ Transcript: {len(transcript.segments)} segments")
+        logger.info(f"✓ Content Filter: {content_filter_result.overall_compliance.upper()}")
         logger.info(f"✓ Analysis: {len(analysis.suggested_sections)} sections")
         logger.info(f"✓ Article: {article.word_count} words")
         logger.info(f"✓ SEO: Complete package")
@@ -323,6 +353,12 @@ class YouTubeToArticlePipeline:
         seo_path = video_dir / "seo.json"
         with open(seo_path, 'w', encoding='utf-8') as f:
             json.dump(output.seo.model_dump(), f, indent=2, default=str)
+
+        # Save content filter results
+        if output.content_filter:
+            filter_path = video_dir / "content_filter.json"
+            with open(filter_path, 'w', encoding='utf-8') as f:
+                json.dump(output.content_filter.model_dump(), f, indent=2, default=str)
 
         # Save quality assessment
         if output.quality_assessment:
