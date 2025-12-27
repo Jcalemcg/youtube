@@ -13,9 +13,72 @@ import streamlit as st
 import logging
 from pathlib import Path
 import sys
+import os
+from dotenv import load_dotenv
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
+
+# Validate .env file exists before proceeding
+env_file = Path(__file__).parent / '.env'
+env_example = Path(__file__).parent / '.env.example'
+
+if not env_file.exists():
+    st.error("⚠️ Configuration Error: .env file not found!")
+    st.markdown("""
+    ### Setup Required
+
+    Please create a `.env` file with your configuration:
+
+    1. Copy the example file:
+    ```bash
+    cp .env.example .env
+    ```
+
+    2. Edit `.env` and add your HuggingFace API token:
+    ```
+    HF_TOKEN=your_huggingface_api_token_here
+    ```
+
+    3. Get your token at: https://huggingface.co/settings/tokens
+
+    4. Restart the app after creating `.env`
+    """)
+
+    if env_example.exists():
+        st.info("✓ `.env.example` found - use it as a template")
+    else:
+        st.warning("⚠️ `.env.example` not found - please check your installation")
+
+    st.stop()
+
+# Load environment variables from .env
+load_dotenv(env_file)
+
+# Validate HF_TOKEN is configured
+try:
+    hf_token = os.getenv('HF_TOKEN', '')
+    if not hf_token or hf_token == 'your_huggingface_api_token_here':
+        st.error("⚠️ Configuration Error: HuggingFace API token not configured!")
+        st.markdown("""
+        ### HuggingFace Token Required
+
+        Please edit your `.env` file and add a valid HuggingFace API token:
+
+        1. Get your token at: https://huggingface.co/settings/tokens
+        2. Open `.env` in a text editor
+        3. Replace `your_huggingface_api_token_here` with your actual token
+        4. Save the file and restart the app
+
+        **Example:**
+        ```
+        HF_TOKEN=hf_abcdefghijklmnopqrstuvwxyz1234567890
+        ```
+        """)
+        st.stop()
+except Exception as e:
+    st.error(f"⚠️ Error loading environment variables: {e}")
+    st.stop()
 
 from pipeline import create_pipeline
 from models.schemas import *

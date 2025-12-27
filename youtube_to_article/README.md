@@ -13,6 +13,30 @@ Convert YouTube videos into SEO-optimized articles using AI-powered multi-agent 
 
 ## Quick Start
 
+### Option A: Automated Setup (Recommended)
+
+Run the setup script for your platform:
+
+**Linux/macOS:**
+```bash
+./setup.sh
+```
+
+**Windows:**
+```bash
+setup.bat
+```
+
+The script will:
+- Create `.env` from template
+- Prompt for your HuggingFace API token
+- Install Python dependencies
+- Check FFmpeg installation
+
+Then skip to step 3 (Launch the Web UI) below.
+
+### Option B: Manual Setup
+
 ### 1. Install Dependencies
 
 ```bash
@@ -22,10 +46,23 @@ pip install -r requirements.txt
 
 ### 2. Configure Environment
 
-The `.env` file is already configured with your settings. It includes:
-- Hugging Face API token
-- Whisper model configuration (CPU mode)
-- AI model selections
+Copy the example environment file and configure your settings:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your **HuggingFace API token** (required):
+```bash
+HF_TOKEN=your_huggingface_api_token_here
+```
+
+The `.env` file includes configuration for:
+- **HuggingFace API token** (required - get yours at https://huggingface.co/settings/tokens)
+- Whisper model configuration (base model, CPU mode by default)
+- AI model selections (Llama 3.3 70B for analysis/writing)
+- Bot detection prevention (automatic - see Bot Detection section below)
+- FFmpeg path (auto-detected, customizable if needed)
 
 ### 3. Launch the Web UI
 
@@ -87,7 +124,8 @@ youtube_to_article/
 │   └── schemas.py          # Pydantic data models
 ├── test_phase1.py          # Test YouTube/Whisper tools
 ├── requirements.txt        # Python dependencies
-└── .env                    # Environment configuration
+├── .env.example            # Environment configuration template
+└── .env                    # Your environment config (create from .env.example)
 ```
 
 ## AI Models Used
@@ -100,8 +138,8 @@ youtube_to_article/
 ## Requirements
 
 - Python 3.10+
-- FFmpeg (already installed at `C:/ffmpeg/`)
-- Hugging Face Pro account (for LLM API access)
+- FFmpeg (auto-detected, or set `FFMPEG_PATH` in `.env`)
+- Hugging Face account with API access (Pro recommended for faster inference)
 - Internet connection
 
 ## Testing
@@ -137,11 +175,25 @@ output/{video_id}/
 - **Bandwidth**: Minimal (audio download only)
 - **Processing Time**: 2-5 minutes per 10-minute video
 
+## Bot Detection Prevention
+
+This tool implements several anti-bot detection measures to ensure reliable YouTube access:
+
+- **Rotating User-Agents**: Cycles through 5 different modern browser user agents
+- **Realistic Headers**: Includes Accept-Language, Sec-Fetch-* headers like real browsers
+- **Request Delays**: Random 1-3 second delays between requests
+- **Client Alternation**: Switches between web and Android YouTube player clients
+- **Retry Strategy**: Exponential backoff for failed requests
+
+These measures work automatically - no configuration needed. For detailed technical documentation, see `BOT_DETECTION_GUIDE.md`.
+
 ## Troubleshooting
 
 ### FFmpeg Not Found
-FFmpeg is installed at `C:/ffmpeg/ffmpeg-master-latest-win64-gpl/bin`
-If you get errors, the installation is already configured in the code.
+The tool auto-detects FFmpeg on your system. If you encounter errors:
+1. Install FFmpeg: https://ffmpeg.org/download.html
+2. Add FFmpeg to your system PATH, OR
+3. Set `FFMPEG_PATH` in your `.env` file to the FFmpeg bin directory
 
 ### Whisper Running Slow
 The system uses CPU mode (int8) for compatibility. For faster transcription:
